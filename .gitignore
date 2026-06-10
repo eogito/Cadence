@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environment
+venv/
+.venv/
+env/
+venv_packages.txt
+
+# Environment variables
+.env
+.env.*
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# FastAPI / Uvicorn
+*.log
+
+# Database
+*.sqlite3
+data/chroma/
+
+# Google OAuth tokens (never commit these)
+token.json
+credentials.json
+*_token.json
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage

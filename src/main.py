@@ -1,0 +1,63 @@
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from contextlib import asynccontextmanager
+from src.database import engine, Base
+from src.api.auth import router as auth_router
+from src.api.webhook import router as webhook_router
+from src.api.approval import router as approval_router
+from src.api.test import router as test_router
+from src.api.briefing import router as briefing_router
+from src.api.meeting_prep import router as meeting_prep_router
+from src.api.tasks import router as tasks_list_router
+from src.api.context import router as context_router
+from src.api.daily_schedule import router as daily_schedule_router
+from src.services.scheduler_service import scheduler, load_all_rules
+from src.services.user_context_service import rebuild_chroma_from_db
+# Import models so SQLAlchemy registers them before create_all
+import src.models.contact       # noqa: F401
+import src.models.task          # noqa: F401
+import src.models.recurring_rule  # noqa: F401
+import src.models.user_context    # noqa: F401
+import os
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Auto-create tables
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    # Start scheduler and load saved recurring rules
+    scheduler.start()
+    await load_all_rules()
+    await rebuild_chroma_from_db()
+    yield
+    scheduler.shutdown(wait=False)
+    await engine.dispose()
+
+app = FastAPI(
+    title="AI Task Secretary API",
+    version="0.1.0",
+    lifespan=lifespan
+)
+
+app.include_router(auth_router)
+app.include_router(webhook_router)
+app.include_router(approval_router)
+app.include_router(test_router)
+app.include_router(briefing_router)
+app.include_router(meeting_prep_router)
+app.include_router(tasks_list_router)
+app.include_router(context_router)
+app.include_router(daily_schedule_router)
+
+# Serve the frontend
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
+@app.get("/")
+async def serve_frontend():
+    return FileResponse(os.path.join(static_dir, "index.html"))
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}

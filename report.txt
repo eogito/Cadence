@@ -1,0 +1,60 @@
+======================================================
+PROJECT REPORT: AI TASK SCHEDULER MVP
+DATE: June 1, 2026
+STATUS: Core Architecture Completed
+======================================================
+
+1. SYSTEM OVERVIEW
+The AI Task Scheduler is an asynchronous, event-driven personal secretary application. It monitors a user's Gmail inbox via push notifications, uses AI to extract tasks and propose calendar schedules, and waits for explicit user approval before executing writes to external APIs.
+
+2. ARCHITECTURE & TECH STACK
+- API Layer: FastAPI (Python) running asynchronously via Uvicorn.
+- Persistence Layer: PostgreSQL with Asyncpg driver (via SQLAlchemy).
+- AI Orchestration: LangGraph for stateful, cyclic agent workflows.
+- LLM Provider: OpenAI (gpt-4o-mini).
+- External Integrations: Google OAuth 2.0, Gmail API, Google Calendar API.
+
+3. MILESTONES COMPLETED
+[X] Milestone 1: Foundation (FastAPI, Async DB, Google OAuth setup).
+[X] Milestone 2: Integrations (Gmail/Calendar Service wrappers, Webhook endpoint).
+[X] Milestone 3: AI Orchestration (LangGraph state definition, Pydantic extraction, HITL interruption).
+[X] Milestone 4: Execution (Connecting webhooks to background tasks, API execution loop).
+
+4. DEPLOYMENT & ENVIRONMENT STATUS
+The system is configured for local development.
+- Database: Expects local PostgreSQL instance on port 5432.
+- Environment: Configured via .env (Google Auth populated, OpenAI key pending).
+
+5. IMMEDIATE ACTION ITEMS
+1. Replace 'sk-your-openai-api-key' in the .env file with a valid OpenAI token.
+2. Spin up a local PostgreSQL database (e.g., via Docker).
+3. Start the application using: `python -m uvicorn src.main:app --reload`
+4. Authenticate a test user via `http://localhost:8000/auth/login`.
+======================================================
+
+6. CORE DATA FLOW (HUMAN-IN-THE-LOOP)
+- Ingestion: Google Cloud Pub/Sub sends a push notification to the webhook endpoint.
+- Trigger: A background task securely fetches the email body via the Gmail API.
+- Planning: LangGraph invokes the LLM (gpt-4o-mini) to extract Pydantic-structured validation objects (Tasks & Calendar Proposals).
+- Suspension: The LangGraph state pauses automatically (interrupt_before), saving its exact memory and context to PostgreSQL.
+- Approval: The client queries for pending tasks. A human sends an approval or modification.
+- Resolution: LangGraph resumes. If approved, it creates Google Calendar events. If modified, it loops back to the planning phase for recalculation.
+
+7. API ENDPOINTS SUMMARY
+- GET  /auth/login                 : Initiates Google OAuth consent screen.
+- GET  /auth/callback              : Central callback for exchanging codes for credentials.
+- POST /webhooks/gmail             : Target for Google Pub/Sub push notifications.
+- GET  /tasks/pending/{thread_id}  : Retrieves a paused AI workflow state.
+- POST /tasks/approve              : Resumes workflow with human decision (approve/reject/modify).
+
+8. ROADMAP & V2 FEATURES
+- Frontend Dashboard: Build a React/Next.js UI to visualize pending tasks and calendar slots.
+- Semantic Memory: Implement pgvector in PostgreSQL to retrieve past user preferences.
+- Workflow Resilience: Migrate FastAPI BackgroundTasks to Celery/Redis for dead-letter queues.
+- Enhanced Sync: Utilize Google History API to accurately resolve batched message IDs.
+
+9. SECURITY AND COMPLIANCE
+- Oauth Token Management: Raw JSON token objects are stored directly in the database, relying on Google's libraries for automated refresh.
+- Execution Safety: No external write actions execute without strict "approved" status from the HTTP API.
+- Prompt Injection: Protected by relying on LangChain's Pydantic structured output parsers rather than raw text generation.
+======================================================

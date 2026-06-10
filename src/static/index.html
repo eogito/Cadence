@@ -1,0 +1,856 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Personal Secretary</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f0f2f5; color: #1a1a2e; min-height: 100vh; }
+
+    header {
+      background: #1a1a2e; color: white; padding: 14px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header .brand { display: flex; align-items: center; gap: 10px; font-size: 1.1rem; font-weight: 600; }
+
+    nav { display: flex; gap: 6px; }
+    nav button {
+      padding: 7px 16px; border: none; border-radius: 6px; font-size: 0.85rem;
+      font-weight: 500; cursor: pointer; background: rgba(255,255,255,.12); color: white;
+      transition: background .15s;
+    }
+    nav button:hover, nav button.active { background: rgba(255,255,255,.25); }
+
+    main { max-width: 860px; margin: 28px auto; padding: 0 16px; }
+
+    .tab { display: none; flex-direction: column; gap: 20px; }
+    .tab.active { display: flex; }
+
+    .card { background: white; border-radius: 12px; padding: 22px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+    .card h2 { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+    .card .subtitle { font-size: 0.82rem; color: #6b7280; margin-bottom: 16px; }
+
+    .row { display: flex; gap: 8px; align-items: center; }
+    input[type="text"], input[type="email"], textarea {
+      flex: 1; padding: 9px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+      font-size: 0.88rem; outline: none; transition: border-color .15s; font-family: inherit;
+    }
+    input:focus, textarea:focus { border-color: #4f46e5; }
+    textarea { resize: vertical; min-height: 80px; }
+
+    button {
+      padding: 9px 18px; border: none; border-radius: 8px; font-size: 0.88rem;
+      font-weight: 500; cursor: pointer; transition: opacity .15s; white-space: nowrap;
+    }
+    button:hover { opacity: .85; }
+    button:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary { background: #4f46e5; color: white; }
+    .btn-success { background: #16a34a; color: white; }
+    .btn-danger  { background: #dc2626; color: white; }
+    .btn-outline { background: white; color: #4f46e5; border: 1px solid #4f46e5; }
+    .btn-sm { padding: 6px 12px; font-size: 0.82rem; }
+
+    .status { font-size: 0.83rem; margin-top: 10px; padding: 8px 12px; border-radius: 6px; line-height: 1.5; }
+    .status.info    { background: #eff6ff; color: #1d4ed8; }
+    .status.success { background: #f0fdf4; color: #15803d; }
+    .status.error   { background: #fef2f2; color: #b91c1c; }
+    .hidden { display: none; }
+
+    .cat-section { margin-bottom: 20px; }
+    .cat-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .cat-header h3 { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+    .cat-badge { font-size: 0.72rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; }
+    .cat-urgent    { color: #991b1b; background: #fee2e2; }
+    .cat-action    { color: #92400e; background: #fef3c7; }
+    .cat-fyi       { color: #1e40af; background: #dbeafe; }
+    .cat-news      { color: #065f46; background: #d1fae5; }
+    .cat-spam      { color: #6b7280; background: #f3f4f6; }
+    .cat-other     { color: #4b5563; background: #e5e7eb; }
+    .email-row { display: flex; flex-direction: column; gap: 2px; background: #f9fafb;
+                 border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 13px;
+                 margin-bottom: 7px; font-size: 0.87rem; }
+    .email-row .sender { font-weight: 600; color: #111827; }
+    .email-row .subject { color: #374151; }
+    .email-row .reason { font-size: 0.78rem; color: #6b7280; margin-top: 2px; font-style: italic; }
+    .calendar-summary { font-size: 0.9rem; line-height: 1.6; color: #374151; margin-bottom: 18px;
+                        padding: 12px 14px; background: #eff6ff; border-radius: 8px;
+                        border-left: 3px solid #4f46e5; }
+
+    .section-header { font-size: 0.78rem; font-weight: 600; text-transform: uppercase;
+                      letter-spacing: .06em; color: #6b7280; margin: 14px 0 8px; }
+    .plan-item { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px;
+                 padding: 11px 14px; margin-bottom: 8px; font-size: 0.88rem; line-height: 1.5; }
+    .plan-item strong { display: block; margin-bottom: 2px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 0.74rem; font-weight: 500; margin-top: 4px; }
+    .badge-high   { background: #fee2e2; color: #991b1b; }
+    .badge-medium { background: #fef9c3; color: #854d0e; }
+    .badge-low    { background: #dcfce7; color: #166534; }
+
+    .draft-box { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 14px; margin-top: 12px; }
+    .draft-box .draft-label { font-size: 0.78rem; font-weight: 600; color: #15803d; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
+    .draft-box textarea { border-color: #86efac; width: 100%; }
+    .draft-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+    .approval-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+    #modifyRow { display: none; flex-direction: column; gap: 8px; margin-top: 10px; }
+
+    .thread-tag { font-size: 0.72rem; color: #9ca3af; font-family: monospace; margin-top: 8px; }
+
+    .prep-text { white-space: pre-wrap; font-size: 0.9rem; line-height: 1.7; color: #374151; }
+    .event-card { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
+    .event-card strong { display: block; font-size: 0.95rem; margin-bottom: 4px; }
+    .event-card span { font-size: 0.82rem; color: #1d4ed8; }
+
+    .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid currentColor;
+               border-top-color: transparent; border-radius: 50%; animation: spin .6s linear infinite;
+               vertical-align: middle; margin-right: 5px; opacity: .7; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="1.8">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+    </svg>
+    AI Personal Secretary
+  </div>
+  <nav>
+    <button class="active" onclick="showTab('emailTab', this)">Email to Calendar</button>
+    <button onclick="showTab('briefingTab', this)">Morning Briefing</button>
+    <button onclick="showTab('prepTab', this)">Meeting Prep</button>
+    <button onclick="showTab('tasksTab', this)">Tasks</button>
+    <button onclick="showTab('contactsTab', this)">Contacts</button>
+    <button onclick="showTab('rulesTab', this)">My Rules</button>
+    <button onclick="showTab('scheduleTab', this)">Daily Schedule</button>
+  </nav>
+</header>
+
+<main>
+
+  <!-- TAB 1: Email to Calendar -->
+  <div id="emailTab" class="tab active">
+    <div class="card">
+      <h2>Step 1 — Process Latest Email</h2>
+      <p class="subtitle">Fetch your latest email, extract tasks and propose calendar events.</p>
+      <div class="row">
+        <input type="email" id="emailInput" value="glenlin7813@gmail.com" />
+        <button class="btn-primary" id="triggerBtn" onclick="triggerWorkflow()">Run AI</button>
+      </div>
+      <div id="triggerStatus" class="status hidden"></div>
+    </div>
+
+    <div class="card" id="planCard" style="display:none">
+      <h2>Step 2 — Review AI Plan</h2>
+      <p class="subtitle">The AI proposed tasks and calendar events from your email.</p>
+      <div id="planContent"></div>
+      <div id="draftBox" class="draft-box" style="display:none">
+        <div class="draft-label">Suggested Reply</div>
+        <textarea id="draftText" rows="5"></textarea>
+        <div class="draft-actions">
+          <button class="btn-success btn-sm" onclick="sendDraft()">Send Reply</button>
+          <button class="btn-outline btn-sm" onclick="document.getElementById('draftBox').style.display='none'">Dismiss</button>
+        </div>
+        <div id="draftStatus" class="status hidden"></div>
+      </div>
+      <div class="thread-tag" id="threadTag"></div>
+      <div class="approval-actions">
+        <button class="btn-success" onclick="submitDecision('approved')">Approve and Schedule</button>
+        <button class="btn-danger"  onclick="submitDecision('rejected')">Reject</button>
+        <button class="btn-outline" onclick="toggleModify()">Request Changes</button>
+      </div>
+      <div id="modifyRow">
+        <textarea id="feedbackText" placeholder="Describe what should change..."></textarea>
+        <button class="btn-primary btn-sm" style="align-self:flex-start" onclick="submitDecision('modified')">Submit</button>
+      </div>
+      <div id="approvalStatus" class="status hidden"></div>
+    </div>
+  </div>
+
+  <!-- TAB 2: Morning Briefing -->
+  <div id="briefingTab" class="tab">
+    <div class="card">
+      <h2>Morning Briefing</h2>
+      <p class="subtitle">AI categorizes your unread emails and summarizes today's calendar.</p>
+      <div class="row">
+        <input type="email" id="briefingEmail" value="glenlin7813@gmail.com" />
+        <button class="btn-primary" id="briefingBtn" onclick="getBriefing()">Generate</button>
+      </div>
+      <div id="briefingStatus" class="status hidden"></div>
+    </div>
+    <div class="card" id="briefingResult" style="display:none">
+      <div class="stats-bar" style="display:flex;gap:20px;margin-bottom:16px">
+        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#4f46e5" id="statEvents">-</div><div style="font-size:0.75rem;color:#6b7280">Events Today</div></div>
+        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#4f46e5" id="statEmails">-</div><div style="font-size:0.75rem;color:#6b7280">Unread</div></div>
+        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#dc2626" id="statUrgent">-</div><div style="font-size:0.75rem;color:#6b7280">Urgent</div></div>
+        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#d97706" id="statAction">-</div><div style="font-size:0.75rem;color:#6b7280">Action Required</div></div>
+      </div>
+      <div class="calendar-summary" id="calendarSummary"></div>
+      <div id="emailCategories"></div>
+    </div>
+  </div>
+
+  <!-- TAB 3: Meeting Prep -->
+  <div id="prepTab" class="tab">
+    <div class="card">
+      <h2>Meeting Prep</h2>
+      <p class="subtitle">AI brief for your next upcoming meeting, with context from recent emails with attendees.</p>
+      <div class="row">
+        <input type="email" id="prepEmail" value="glenlin7813@gmail.com" />
+        <button class="btn-primary" id="prepBtn" onclick="getMeetingPrep()">Prepare</button>
+      </div>
+      <div id="prepStatus" class="status hidden"></div>
+    </div>
+    <div class="card" id="prepResult" style="display:none">
+      <div class="event-card" id="prepEventCard"></div>
+      <div class="prep-text" id="prepText"></div>
+    </div>
+  </div>
+
+  <!-- TAB 4: Tasks -->
+  <div id="tasksTab" class="tab">
+    <div class="card">
+      <h2>Task List</h2>
+      <p class="subtitle">AI-extracted tasks from your emails, sorted by urgency. Due dates inferred automatically.</p>
+      <div class="row">
+        <input type="email" id="tasksEmail" value="glenlin7813@gmail.com" />
+        <button class="btn-primary" id="tasksBtn" onclick="getTasks()">Load Tasks</button>
+      </div>
+      <div id="tasksStatus" class="status hidden"></div>
+    </div>
+    <div class="card" id="tasksResult" style="display:none">
+      <div style="display:flex;gap:20px;margin-bottom:16px">
+        <div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:#4f46e5" id="statTotal">-</div><div style="font-size:0.75rem;color:#6b7280">Total</div></div>
+        <div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:#dc2626" id="statOverdue">-</div><div style="font-size:0.75rem;color:#6b7280">Overdue</div></div>
+        <div style="text-align:center"><div style="font-size:1.4rem;font-weight:700;color:#d97706" id="statHigh">-</div><div style="font-size:0.75rem;color:#6b7280">High Priority</div></div>
+      </div>
+      <div id="tasksList"></div>
+    </div>
+  </div>
+
+  <!-- TAB 5: Contacts -->
+  <div id="contactsTab" class="tab">
+    <div class="card">
+      <h2>Contact Memory</h2>
+      <p class="subtitle">AI-maintained summaries of people you communicate with, updated after each email.</p>
+      <div class="row">
+        <input type="email" id="contactsEmail" value="glenlin7813@gmail.com" />
+        <button class="btn-primary" id="contactsBtn" onclick="getContacts()">Load Contacts</button>
+      </div>
+      <div id="contactsStatus" class="status hidden"></div>
+    </div>
+    <div class="card" id="contactsResult" style="display:none">
+      <div id="contactsList"></div>
+    </div>
+  </div>
+
+  <!-- TAB 6: My Rules -->
+  <div id="rulesTab" class="tab">
+
+    <!-- Add personal context -->
+    <div class="card">
+      <h2>Add Personal Context</h2>
+      <p class="subtitle">Tell the AI things it should always know — school schedule, important dates, preferences. It will use this when processing your emails.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <textarea id="ctxText" placeholder="e.g. I have CS101 every Monday and Wednesday 9-11am&#10;e.g. My final exam is June 20&#10;e.g. I prefer morning meetings before noon" rows="3"></textarea>
+        <div class="row">
+          <select id="ctxCategory" style="flex:1;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.88rem">
+            <option value="schedule">School / Work Schedule</option>
+            <option value="important_date">Important Date</option>
+            <option value="preference">Preference</option>
+            <option value="recurring_rule">Other Rule</option>
+          </select>
+          <button class="btn-primary" id="addCtxBtn" onclick="addContext()">Save</button>
+        </div>
+        <div id="ctxStatus" class="status hidden"></div>
+      </div>
+    </div>
+
+    <!-- Add recurring rule -->
+    <div class="card">
+      <h2>Add Recurring Reminder</h2>
+      <p class="subtitle">Create a task automatically on a schedule. e.g. "Send 5 cold emails" every day at 4PM.</p>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <input type="text" id="ruleDesc" placeholder="Description — e.g. Send 5 cold emails every day at 4PM" />
+        <input type="text" id="ruleTask" placeholder="Task title — e.g. Send 5 cold emails" />
+        <div class="row">
+          <input type="number" id="ruleHour" placeholder="Hour (0-23)" min="0" max="23" style="flex:1" />
+          <input type="number" id="ruleMinute" placeholder="Minute" min="0" max="59" value="0" style="flex:1" />
+          <select id="ruleDow" style="flex:2;padding:9px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:.88rem">
+            <option value="*">Every day</option>
+            <option value="mon">Mondays</option>
+            <option value="tue">Tuesdays</option>
+            <option value="wed">Wednesdays</option>
+            <option value="thu">Thursdays</option>
+            <option value="fri">Fridays</option>
+            <option value="mon,wed">Mon &amp; Wed</option>
+            <option value="tue,thu">Tue &amp; Thu</option>
+          </select>
+          <button class="btn-primary" id="addRuleBtn" onclick="addRule()">Add</button>
+        </div>
+        <div id="ruleStatus" class="status hidden"></div>
+      </div>
+    </div>
+
+    <!-- View stored context + rules -->
+    <div class="card">
+      <h2>Stored Context &amp; Rules</h2>
+      <div class="row" style="margin-bottom:12px">
+        <input type="email" id="rulesEmail" value="glenlin7813@gmail.com" style="flex:1" />
+        <button class="btn-outline" onclick="loadRulesTab()">Refresh</button>
+      </div>
+      <div id="rulesStatus" class="status hidden"></div>
+      <div id="contextList"></div>
+      <div id="recurringList" style="margin-top:16px"></div>
+    </div>
+
+  </div>
+
+  <!-- TAB 7: Daily Schedule -->
+  <div id="scheduleTab" class="tab">
+    <div class="card">
+      <h2>Daily Schedule</h2>
+      <p class="subtitle">AI builds your day from calendar events, open tasks, personal rules, and recurring reminders — with importance ratings and realistic time estimates.</p>
+      <div class="row">
+        <input type="email" id="scheduleEmail" value="glenlin7813@gmail.com" />
+        <button class="btn-primary" id="scheduleBtn" onclick="getDailySchedule()">Generate Schedule</button>
+      </div>
+      <div id="scheduleStatus" class="status hidden"></div>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="card" id="scheduleStats" style="display:none">
+      <div style="display:flex;gap:24px;flex-wrap:wrap">
+        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#4f46e5" id="sStatBlocks">-</div><div style="font-size:.75rem;color:#6b7280">Schedule Blocks</div></div>
+        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#059669" id="sStatFixed">-</div><div style="font-size:.75rem;color:#6b7280">Fixed Events</div></div>
+        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#d97706" id="sStatTasks">-</div><div style="font-size:.75rem;color:#6b7280">Open Tasks</div></div>
+        <div style="text-align:center"><div style="font-size:1.5rem;font-weight:700;color:#7c3aed" id="sStatRules">-</div><div style="font-size:.75rem;color:#6b7280">Rules Today</div></div>
+      </div>
+    </div>
+
+    <div class="card" id="scheduleResult" style="display:none">
+      <div id="scheduleDateLabel" style="font-size:1.15rem;font-weight:700;color:#111827;margin-bottom:6px"></div>
+      <div id="scheduleSummary" style="color:#6b7280;font-size:.88rem;margin-bottom:20px;line-height:1.6"></div>
+
+      <!-- Focus areas -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px" id="scheduleFocus"></div>
+
+      <!-- Timeline -->
+      <div id="scheduleTimeline"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  const API = '';
+  let currentThreadId = '';
+
+  function showTab(id, btn) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  function showStatus(id, msg, type) {
+    const el = document.getElementById(id);
+    el.textContent = msg;
+    el.className = 'status ' + type;
+  }
+  function hideStatus(id) { document.getElementById(id).className = 'status hidden'; }
+
+  function setLoading(btnId, loading, label) {
+    const btn = document.getElementById(btnId);
+    btn.disabled = loading;
+    btn.innerHTML = loading ? '<span class="spinner"></span>Working...' : label;
+  }
+
+  function esc(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Feature 1
+  async function triggerWorkflow() {
+    const email = document.getElementById('emailInput').value.trim();
+    setLoading('triggerBtn', true, 'Run AI');
+    showStatus('triggerStatus', 'Calling AI - this may take 10-15 seconds...', 'info');
+    document.getElementById('planCard').style.display = 'none';
+    try {
+      const res = await fetch(API + '/test/trigger?email=' + encodeURIComponent(email), { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      currentThreadId = data.thread_id;
+      showStatus('triggerStatus', 'AI finished! Review the plan below.', 'success');
+      await loadPlan(currentThreadId);
+    } catch (e) {
+      showStatus('triggerStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('triggerBtn', false, 'Run AI');
+    }
+  }
+
+  async function loadPlan(threadId) {
+    const res = await fetch(API + '/tasks/pending/' + threadId);
+    const data = await res.json();
+    if (data.status === 'no pending actions') {
+      showStatus('triggerStatus', 'No pending plan found.', 'info');
+      return;
+    }
+    renderPlan(data.proposed_plan);
+    document.getElementById('planCard').style.display = 'block';
+    document.getElementById('threadTag').textContent = 'thread: ' + threadId;
+    hideStatus('approvalStatus');
+  }
+
+  function renderPlan(plan) {
+    if (!plan) return;
+    const tasks = (plan.tasks || []).map(t =>
+      '<div class="plan-item"><strong>' + esc(t.title) + '</strong>' + esc(t.description) +
+      '<span class="badge badge-' + esc((t.priority||'').toLowerCase()) + '">' + esc(t.priority) + '</span></div>'
+    ).join('') || '<p style="color:#9ca3af;font-size:.85rem">No tasks extracted.</p>';
+
+    const events = (plan.events || []).map(e =>
+      '<div class="plan-item"><strong>' + esc(e.summary) + '</strong>' + esc(e.start_time) + ' to ' + esc(e.end_time) +
+      '<br/><span style="color:#6b7280;font-size:.82rem">' + esc(e.rationale) + '</span></div>'
+    ).join('') || '<p style="color:#9ca3af;font-size:.85rem">No events proposed.</p>';
+
+    document.getElementById('planContent').innerHTML =
+      '<div class="section-header">Extracted Tasks</div>' + tasks +
+      '<div class="section-header">Proposed Calendar Events</div>' + events;
+
+    if (plan.needs_reply && plan.suggested_reply) {
+      document.getElementById('draftText').value = plan.suggested_reply;
+      document.getElementById('draftBox').style.display = 'block';
+    } else {
+      document.getElementById('draftBox').style.display = 'none';
+    }
+  }
+
+  function toggleModify() {
+    const row = document.getElementById('modifyRow');
+    row.style.display = row.style.display === 'flex' ? 'none' : 'flex';
+  }
+
+  async function submitDecision(action) {
+    if (!currentThreadId) { showStatus('approvalStatus', 'No active thread.', 'error'); return; }
+    const feedback = document.getElementById('feedbackText').value.trim();
+    showStatus('approvalStatus', 'Submitting...', 'info');
+    try {
+      const res = await fetch(API + '/tasks/approve', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: currentThreadId, action, feedback })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      const msgs = { approved: 'Approved! Calendar event is being created.', rejected: 'Plan rejected.', modified: 'Changes submitted.' };
+      showStatus('approvalStatus', msgs[action] || data.message, 'success');
+      if (action !== 'modified') document.getElementById('planCard').style.display = 'none';
+    } catch (e) {
+      showStatus('approvalStatus', 'Error: ' + e.message, 'error');
+    }
+  }
+
+  async function sendDraft() {
+    const email = document.getElementById('emailInput').value.trim();
+    const body = document.getElementById('draftText').value.trim();
+    const to = window.prompt('Reply to (email address):');
+    if (!to) return;
+    const subject = window.prompt('Subject:', 'Re: (your email)') || 'Re: (your email)';
+    showStatus('draftStatus', 'Sending...', 'info');
+    try {
+      const res = await fetch(API + '/tasks/send-draft', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: currentThreadId, to, subject, body, user_email: email })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      showStatus('draftStatus', 'Email sent!', 'success');
+    } catch (e) {
+      showStatus('draftStatus', 'Error: ' + e.message, 'error');
+    }
+  }
+
+  // Feature 2
+  const CAT_META = {
+    urgent_reply:    { label: 'Respond ASAP',      cls: 'cat-urgent' },
+    action_required: { label: 'Action Required',   cls: 'cat-action' },
+    fyi:             { label: 'FYI',               cls: 'cat-fyi' },
+    news_newsletter: { label: 'News & Newsletters', cls: 'cat-news' },
+    spam_promo:      { label: 'Spam & Promotions', cls: 'cat-spam' },
+    other:           { label: 'Other',             cls: 'cat-other' },
+  };
+
+  // Feature 2
+  async function getBriefing() {
+    const email = document.getElementById('briefingEmail').value.trim();
+    setLoading('briefingBtn', true, 'Generate');
+    showStatus('briefingStatus', 'Fetching calendar and emails...', 'info');
+    document.getElementById('briefingResult').style.display = 'none';
+    try {
+      const res = await fetch(API + '/briefing?email=' + encodeURIComponent(email));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      if (!data.categorized_emails) throw new Error('Unexpected response: ' + JSON.stringify(data));
+
+      document.getElementById('statEvents').textContent = data.stats.events_today;
+      document.getElementById('statEmails').textContent = data.stats.unread_emails;
+      document.getElementById('statUrgent').textContent = data.stats.urgent;
+      document.getElementById('statAction').textContent = data.stats.action_required;
+      document.getElementById('calendarSummary').textContent = data.calendar_summary;
+
+      const cats = data.categorized_emails;
+      let html = '';
+      for (const [key, meta] of Object.entries(CAT_META)) {
+        const items = cats[key] || [];
+        if (!items.length) continue;
+        html += '<div class="cat-section">';
+        html += '<div class="cat-header"><span class="cat-badge ' + meta.cls + '">' + esc(meta.label) + '</span>';
+        html += '<span style="font-size:.78rem;color:#9ca3af">' + items.length + ' email' + (items.length > 1 ? 's' : '') + '</span></div>';
+        for (const e of items) {
+          html += '<div class="email-row">';
+          html += '<span class="sender">' + esc(e.sender) + '</span>';
+          html += '<span class="subject">' + esc(e.subject) + '</span>';
+          html += '<span class="reason">' + esc(e.reason) + '</span>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+      document.getElementById('emailCategories').innerHTML = html;
+      document.getElementById('briefingResult').style.display = 'block';
+      hideStatus('briefingStatus');
+    } catch (e) {
+      showStatus('briefingStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('briefingBtn', false, 'Generate');
+    }
+  }
+
+  // Feature 3
+  async function getMeetingPrep() {
+    const email = document.getElementById('prepEmail').value.trim();
+    setLoading('prepBtn', true, 'Prepare');
+    showStatus('prepStatus', 'Fetching next meeting and email history...', 'info');
+    document.getElementById('prepResult').style.display = 'none';
+    try {
+      const res = await fetch(API + '/meeting-prep?email=' + encodeURIComponent(email));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      if (data.message) { showStatus('prepStatus', data.message, 'info'); return; }
+      const evt = data.event;
+      document.getElementById('prepEventCard').innerHTML =
+        '<strong>' + esc(evt.summary || 'Untitled Meeting') + '</strong>' +
+        '<span>' + esc(evt.start) + ' to ' + esc(evt.end) + '</span>' +
+        (data.attendees.length ? '<br/><span style="color:#6b7280;font-size:.82rem">Attendees: ' + data.attendees.map(esc).join(', ') + '</span>' : '');
+      document.getElementById('prepText').textContent = data.prep_brief;
+      document.getElementById('prepResult').style.display = 'block';
+      hideStatus('prepStatus');
+    } catch (e) {
+      showStatus('prepStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('prepBtn', false, 'Prepare');
+    }
+  }
+
+  // Feature 4: Tasks
+  async function getTasks() {
+    const email = document.getElementById('tasksEmail').value.trim();
+    setLoading('tasksBtn', true, 'Load Tasks');
+    showStatus('tasksStatus', 'Loading tasks...', 'info');
+    document.getElementById('tasksResult').style.display = 'none';
+    try {
+      const res = await fetch(API + '/tasks-list?email=' + encodeURIComponent(email));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      document.getElementById('statTotal').textContent = data.stats.total;
+      document.getElementById('statOverdue').textContent = data.stats.overdue;
+      document.getElementById('statHigh').textContent = data.stats.high_priority;
+      const list = document.getElementById('tasksList');
+      if (!data.tasks.length) {
+        list.innerHTML = '<p style="color:#9ca3af;font-size:.88rem">No tasks yet. Process some emails first.</p>';
+      } else {
+        list.innerHTML = data.tasks.map(t => {
+          const overdueBadge = t.overdue ? '<span style="background:#fee2e2;color:#991b1b;font-size:.72rem;padding:2px 7px;border-radius:99px;margin-left:6px">Overdue</span>' : '';
+          const dueTxt = t.due_date ? ' &middot; Due ' + new Date(t.due_date).toLocaleDateString() : '';
+          const score = t.urgency_score;
+          const scoreColor = score >= 8 ? '#dc2626' : score >= 5 ? '#d97706' : '#6b7280';
+          return '<div class="plan-item" style="display:flex;justify-content:space-between;align-items:flex-start">' +
+            '<div style="flex:1">' +
+            '<strong>' + esc(t.title) + overdueBadge + '</strong>' +
+            '<span style="color:#6b7280;font-size:.82rem;display:block">' + esc(t.description) + '</span>' +
+            '<span class="badge badge-' + esc(t.priority) + '">' + esc(t.priority) + '</span>' +
+            '<span style="font-size:.78rem;color:#9ca3af;margin-left:8px">' + dueTxt + '</span>' +
+            '</div>' +
+            '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:12px">' +
+            '<span style="font-size:1rem;font-weight:700;color:' + scoreColor + '">' + score + '<span style="font-size:.7rem;color:#9ca3af">/10</span></span>' +
+            '<button class="btn-success btn-sm" onclick="completeTask(\'' + t.id + '\')" style="padding:4px 10px;font-size:.75rem">Done</button>' +
+            '</div></div>';
+        }).join('');
+      }
+      document.getElementById('tasksResult').style.display = 'block';
+      hideStatus('tasksStatus');
+    } catch (e) {
+      showStatus('tasksStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('tasksBtn', false, 'Load Tasks');
+    }
+  }
+
+  async function completeTask(taskId) {
+    try {
+      const res = await fetch(API + '/tasks-list/' + taskId + '/complete', { method: 'PATCH' });
+      if (!res.ok) throw new Error('Failed');
+      getTasks();
+    } catch (e) { alert('Error: ' + e.message); }
+  }
+
+  // Feature 5: Contacts
+  async function getContacts() {
+    const email = document.getElementById('contactsEmail').value.trim();
+    setLoading('contactsBtn', true, 'Load Contacts');
+    showStatus('contactsStatus', 'Loading contacts...', 'info');
+    document.getElementById('contactsResult').style.display = 'none';
+    try {
+      const res = await fetch(API + '/tasks-list/contacts?email=' + encodeURIComponent(email));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      const list = document.getElementById('contactsList');
+      if (!data.contacts.length) {
+        list.innerHTML = '<p style="color:#9ca3af;font-size:.88rem">No contacts yet. Process some emails first.</p>';
+      } else {
+        list.innerHTML = data.contacts.map(c =>
+          '<div class="plan-item">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+          '<strong>' + esc(c.name || c.email) + '</strong>' +
+          '<span style="font-size:.75rem;color:#9ca3af">' + c.interaction_count + ' interaction' + (c.interaction_count !== 1 ? 's' : '') + '</span>' +
+          '</div>' +
+          '<div style="font-size:.8rem;color:#6b7280;margin-bottom:6px">' + esc(c.email) + '</div>' +
+          '<div style="font-size:.87rem;color:#374151;line-height:1.5">' + esc(c.summary || 'No summary yet.') + '</div>' +
+          '</div>'
+        ).join('');
+      }
+      document.getElementById('contactsResult').style.display = 'block';
+      hideStatus('contactsStatus');
+    } catch (e) {
+      showStatus('contactsStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('contactsBtn', false, 'Load Contacts');
+    }
+  }
+
+  // Feature 6: My Rules
+  const CAT_LABELS = { schedule: 'Schedule', important_date: 'Important Date', preference: 'Preference', recurring_rule: 'Rule' };
+
+  async function addContext() {
+    const email = document.getElementById('rulesEmail').value.trim();
+    const text = document.getElementById('ctxText').value.trim();
+    const category = document.getElementById('ctxCategory').value;
+    if (!text) { showStatus('ctxStatus', 'Enter some text first.', 'error'); return; }
+    setLoading('addCtxBtn', true, 'Save');
+    try {
+      const res = await fetch(API + '/context', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, text, category })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      showStatus('ctxStatus', 'Saved! The AI will use this when processing your emails.', 'success');
+      document.getElementById('ctxText').value = '';
+      loadRulesTab();
+    } catch (e) {
+      showStatus('ctxStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('addCtxBtn', false, 'Save');
+    }
+  }
+
+  async function addRule() {
+    const email = document.getElementById('rulesEmail').value.trim();
+    const desc = document.getElementById('ruleDesc').value.trim();
+    const task = document.getElementById('ruleTask').value.trim();
+    const hour = document.getElementById('ruleHour').value;
+    const minute = document.getElementById('ruleMinute').value || '0';
+    const dow = document.getElementById('ruleDow').value;
+    if (!desc || !task || hour === '') { showStatus('ruleStatus', 'Fill in all fields.', 'error'); return; }
+    setLoading('addRuleBtn', true, 'Add');
+    try {
+      const res = await fetch(API + '/context/rules', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, description: desc, task_title: task, cron_hour: hour, cron_minute: minute, cron_day_of_week: dow })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      showStatus('ruleStatus', 'Rule saved! Task will be created automatically on schedule.', 'success');
+      document.getElementById('ruleDesc').value = '';
+      document.getElementById('ruleTask').value = '';
+      loadRulesTab();
+    } catch (e) {
+      showStatus('ruleStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('addRuleBtn', false, 'Add');
+    }
+  }
+
+  async function deleteContext(itemId) {
+    const email = document.getElementById('rulesEmail').value.trim();
+    await fetch(API + '/context/' + itemId + '?email=' + encodeURIComponent(email), { method: 'DELETE' });
+    loadRulesTab();
+  }
+
+  async function deleteRule(ruleId) {
+    await fetch(API + '/context/rules/' + ruleId, { method: 'DELETE' });
+    loadRulesTab();
+  }
+
+  // Feature 7: Daily Schedule
+  const SCHED_CAT_META = {
+    fixed_event: { label: 'Fixed', color: '#059669', bg: '#d1fae5' },
+    task:        { label: 'Task',  color: '#d97706', bg: '#fef3c7' },
+    rule_based:  { label: 'Rule',  color: '#7c3aed', bg: '#ede9fe' },
+    suggested:   { label: 'AI Suggested', color: '#4f46e5', bg: '#e0e7ff' },
+  };
+
+  async function getDailySchedule() {
+    const email = document.getElementById('scheduleEmail').value.trim();
+    setLoading('scheduleBtn', true, 'Generate Schedule');
+    showStatus('scheduleStatus', 'Building your day — fetching calendar, tasks, and rules...', 'info');
+    document.getElementById('scheduleResult').style.display = 'none';
+    document.getElementById('scheduleStats').style.display = 'none';
+    try {
+      const res = await fetch(API + '/daily-schedule?email=' + encodeURIComponent(email));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+
+      // Stats
+      document.getElementById('sStatBlocks').textContent = data.stats.total_blocks;
+      document.getElementById('sStatFixed').textContent  = data.stats.fixed_events;
+      document.getElementById('sStatTasks').textContent  = data.stats.open_tasks;
+      document.getElementById('sStatRules').textContent  = data.stats.rules_today;
+      document.getElementById('scheduleStats').style.display = 'block';
+
+      // Header
+      document.getElementById('scheduleDateLabel').textContent = data.date_label;
+      document.getElementById('scheduleSummary').textContent  = data.summary;
+
+      // Focus areas
+      const focusEl = document.getElementById('scheduleFocus');
+      focusEl.innerHTML = (data.focus_areas || []).map(f =>
+        '<span style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:99px;padding:4px 12px;font-size:.8rem;color:#374151">&#x1F3AF; ' + esc(f) + '</span>'
+      ).join('');
+
+      // Timeline
+      const timeline = document.getElementById('scheduleTimeline');
+      if (!data.blocks || !data.blocks.length) {
+        timeline.innerHTML = '<p style="color:#9ca3af;font-size:.88rem">No schedule blocks generated.</p>';
+      } else {
+        timeline.innerHTML = data.blocks.map(b => {
+          const meta = SCHED_CAT_META[b.category] || SCHED_CAT_META.suggested;
+          const imp  = b.importance;
+          const impColor = imp >= 8 ? '#dc2626' : imp >= 5 ? '#d97706' : '#6b7280';
+          const durText = b.duration_minutes >= 60
+            ? Math.floor(b.duration_minutes / 60) + 'h' + (b.duration_minutes % 60 ? ' ' + (b.duration_minutes % 60) + 'm' : '')
+            : b.duration_minutes + ' min';
+          const addTaskBtn = b.can_create_task
+            ? '<button class="btn-outline btn-sm" style="font-size:.72rem;padding:3px 10px;margin-left:8px" ' +
+              'onclick="createTaskFromBlock(\'' + esc(b.title) + '\', \'' + esc(b.rationale) + '\', ' + b.duration_minutes + ')">+ Task</button>'
+            : '';
+          return '<div style="display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid #f3f4f6">' +
+            '<div style="min-width:72px;text-align:right;padding-top:2px">' +
+              '<span style="font-size:.8rem;font-weight:600;color:#374151">' + esc(b.time) + '</span>' +
+            '</div>' +
+            '<div style="width:3px;background:' + meta.color + ';border-radius:99px;align-self:stretch;flex-shrink:0"></div>' +
+            '<div style="flex:1">' +
+              '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">' +
+                '<strong style="font-size:.92rem;color:#111827">' + esc(b.title) + '</strong>' +
+                '<span style="background:' + meta.bg + ';color:' + meta.color + ';font-size:.7rem;padding:2px 8px;border-radius:99px;font-weight:600">' + esc(meta.label) + '</span>' +
+                addTaskBtn +
+              '</div>' +
+              '<div style="display:flex;gap:16px;margin-top:4px;flex-wrap:wrap">' +
+                '<span style="font-size:.78rem;color:' + impColor + ';font-weight:600">&#x2B50; ' + imp + '/10 importance</span>' +
+                '<span style="font-size:.78rem;color:#6b7280">&#x23F1; ' + durText + '</span>' +
+              '</div>' +
+              '<div style="font-size:.82rem;color:#6b7280;margin-top:4px;line-height:1.4">' + esc(b.rationale) + '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+
+      document.getElementById('scheduleResult').style.display = 'block';
+      hideStatus('scheduleStatus');
+    } catch (e) {
+      showStatus('scheduleStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('scheduleBtn', false, 'Generate Schedule');
+    }
+  }
+
+  async function createTaskFromBlock(title, rationale, durationMinutes) {
+    const email = document.getElementById('scheduleEmail').value.trim();
+    try {
+      const res = await fetch(API + '/daily-schedule/create-task', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, title, description: rationale, priority: 'medium', duration_minutes: durationMinutes })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      showStatus('scheduleStatus', '"' + title + '" added to your task list.', 'success');
+    } catch (e) {
+      showStatus('scheduleStatus', 'Error creating task: ' + e.message, 'error');
+    }
+  }
+
+  async function loadRulesTab() {
+    const email = document.getElementById('rulesEmail').value.trim();
+    try {
+      const [ctxRes, rulesRes] = await Promise.all([
+        fetch(API + '/context?email=' + encodeURIComponent(email)),
+        fetch(API + '/context/rules?email=' + encodeURIComponent(email))
+      ]);
+      const ctxData = await ctxRes.json();
+      const rulesData = await rulesRes.json();
+
+      // Render context items
+      const ctxEl = document.getElementById('contextList');
+      const allItems = Object.entries(ctxData.items || {}).flatMap(([cat, items]) =>
+        items.map(i => ({ ...i, cat }))
+      );
+      if (!allItems.length) {
+        ctxEl.innerHTML = '<p style="color:#9ca3af;font-size:.85rem">No context saved yet.</p>';
+      } else {
+        ctxEl.innerHTML = '<div class="section-header">Personal Context (' + allItems.length + ')</div>' +
+          allItems.map(i =>
+            '<div class="plan-item" style="display:flex;justify-content:space-between;align-items:center">' +
+            '<div>' +
+            '<span class="badge badge-medium" style="margin-right:8px">' + esc(CAT_LABELS[i.cat] || i.cat) + '</span>' +
+            '<span style="font-size:.88rem">' + esc(i.text) + '</span>' +
+            '</div>' +
+            '<button class="btn-danger btn-sm" onclick="deleteContext(\'' + i.id + '\')" style="margin-left:12px">Remove</button>' +
+            '</div>'
+          ).join('');
+      }
+
+      // Render recurring rules
+      const rulesEl = document.getElementById('recurringList');
+      if (!rulesData.rules || !rulesData.rules.length) {
+        rulesEl.innerHTML = '<div class="section-header">Recurring Reminders</div><p style="color:#9ca3af;font-size:.85rem">No recurring rules yet.</p>';
+      } else {
+        rulesEl.innerHTML = '<div class="section-header">Recurring Reminders (' + rulesData.rules.length + ')</div>' +
+          rulesData.rules.map(r =>
+            '<div class="plan-item" style="display:flex;justify-content:space-between;align-items:center">' +
+            '<div>' +
+            '<strong>' + esc(r.task_title) + '</strong>' +
+            '<span style="display:block;font-size:.82rem;color:#6b7280">' + esc(r.schedule) + ' &middot; Last fired: ' + esc(r.last_fired) + '</span>' +
+            '</div>' +
+            '<button class="btn-danger btn-sm" onclick="deleteRule(\'' + r.id + '\')" style="margin-left:12px">Remove</button>' +
+            '</div>'
+          ).join('');
+      }
+    } catch (e) {
+      showStatus('rulesStatus', 'Error: ' + e.message, 'error');
+    }
+  }
+</script>
+</body>
+</html>
