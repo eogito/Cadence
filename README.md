@@ -1,4 +1,4 @@
-# AI Task Scheduler
+# Cadence
 
 This project is an AI-powered task scheduler that connects to Gmail and Google Calendar. It extracts tasks from emails and schedules them with user approval.
 
