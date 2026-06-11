@@ -372,6 +372,16 @@
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  function fmtTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;  // unparseable -> show raw
+    return d.toLocaleString(undefined, {
+      weekday: 'short', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit'
+    });
+  }
+
   // Feature 1
   async function triggerWorkflow() {
     const email = document.getElementById('emailInput').value.trim();
@@ -413,7 +423,7 @@
     ).join('') || '<p style="color:#9ca3af;font-size:.85rem">No tasks extracted.</p>';
 
     const events = (plan.events || []).map(e =>
-      '<div class="plan-item"><strong>' + esc(e.summary) + '</strong>' + esc(e.start_time) + ' to ' + esc(e.end_time) +
+      '<div class="plan-item"><strong>' + esc(e.summary) + '</strong>' + esc(fmtTime(e.start_time)) + ' to ' + esc(fmtTime(e.end_time)) +
       '<br/><span style="color:#6b7280;font-size:.82rem">' + esc(e.rationale) + '</span></div>'
     ).join('') || '<p style="color:#9ca3af;font-size:.85rem">No events proposed.</p>';
 
