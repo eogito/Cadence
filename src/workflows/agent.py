@@ -69,13 +69,6 @@ async def classify_email(state: AgentState) -> AgentState:
 async def extract_and_plan(state: AgentState) -> AgentState:
     """Uses LLM to extract tasks and propose calendar events from the email."""
 
-    # Guard: never ask the LLM to extract tasks from an empty body — it will
-    # hallucinate. An email with no readable text is simply not actionable.
-    if not (state.get("email_content") or "").strip():
-        print("Email body empty after extraction — marking non-actionable, skipping LLM.")
-        empty = EmailAnalysis(is_actionable=False, urgency_score=1)
-        return {"analysis": empty.model_dump(), "approval_status": "pending"}
-
     feedback_context = f"\nUser Feedback on previous plan: {state.get('human_feedback')}" if state.get('human_feedback') else ""
 
     # Fetch contact memory context from DB
@@ -109,6 +102,7 @@ async def extract_and_plan(state: AgentState) -> AgentState:
     json_schema = (
         '{{\n'
         '  "is_actionable": boolean,\n'
+        '  "needs_task": boolean,\n'
         '  "urgency_score": integer (1-10),\n'
         '  "tasks": [{{"title": string, "description": string, "priority": "low|medium|high", "due_date": "ISO8601 or empty string"}}],\n'
         '  "events": [{{"summary": string, "start_time": "ISO8601", "end_time": "ISO8601", "rationale": string}}],\n'
@@ -122,6 +116,8 @@ async def extract_and_plan(state: AgentState) -> AgentState:
     system_msg = (
         f"You are an AI executive assistant. Today is {today_str}.\n"
         "Extract actionable tasks and suggest calendar events from the user's email.\n"
+        "Set needs_task=true and populate tasks/events ONLY when there is a clear task AND a date "
+        "(a deadline, meeting, or call with a time). Otherwise leave needs_task=false and tasks/events empty.\n"
         "For tasks, infer due dates from phrases like 'by Friday', 'EOD', 'next week' — use ISO 8601 UTC format.\n"
         "Rate urgency_score 1-10: 10=needs reply/action today, 1=newsletter/no action needed.\n"
         + (f"\nCONTACT CONTEXT:\n{contact_context}\n" if contact_context else "")
@@ -209,6 +205,11 @@ async def extract_and_plan(state: AgentState) -> AgentState:
     except Exception as e:
         print(f"ERROR in extract_and_plan: {type(e).__name__}: {e}")
         raise
+
+async def notification_review(state: AgentState) -> AgentState:
+    """Surface a notification and pause until the user dismisses it."""
+    interrupt(state.get("classification", {}))
+    return {"approval_status": "acknowledged"}
 
 async def human_review(state: AgentState) -> AgentState:
     """Pause here and wait for the human to approve, reject, or modify the plan."""
