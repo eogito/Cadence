@@ -143,8 +143,14 @@
     </div>
 
     <div class="card" id="planCard" style="display:none">
-      <h2>Step 2 — Review AI Plan</h2>
-      <p class="subtitle">The AI proposed tasks and calendar events from your email.</p>
+      <h2>Step 2 — Review Email</h2>
+      <div id="categoryBadge" style="margin-bottom:10px"></div>
+      <details id="fullEmailPanel" style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;padding:8px 12px">
+        <summary style="cursor:pointer;font-size:.82rem;color:#4f46e5;font-weight:600">View full email</summary>
+        <div id="fullEmailMeta" style="font-size:.8rem;color:#6b7280;margin:8px 0"></div>
+        <pre id="fullEmailBody" style="white-space:pre-wrap;font-size:.84rem;line-height:1.5;color:#374151;max-height:320px;overflow:auto;font-family:inherit;margin:0"></pre>
+      </details>
+      <p class="subtitle" id="planSubtitle">The AI proposed tasks and calendar events from your email.</p>
       <div id="planContent"></div>
       <div id="draftBox" class="draft-box" style="display:none">
         <div class="draft-label">Suggested Reply</div>
@@ -405,14 +411,53 @@
   async function loadPlan(threadId) {
     const res = await fetch(API + '/tasks/pending/' + threadId);
     const data = await res.json();
-    if (data.status === 'no pending actions') {
-      showStatus('triggerStatus', 'No pending plan found.', 'info');
-      return;
-    }
-    renderPlan(data.proposed_plan);
     document.getElementById('planCard').style.display = 'block';
     document.getElementById('threadTag').textContent = 'thread: ' + threadId;
     hideStatus('approvalStatus');
+
+    // Full email panel (all categories)
+    const email = data.email || {};
+    document.getElementById('fullEmailMeta').innerHTML =
+      '<strong>' + esc(email.subject || '(no subject)') + '</strong><br/>' + esc(email.sender || '');
+    document.getElementById('fullEmailBody').textContent = email.body || '(no readable text)';
+
+    // Category badge
+    const badges = {
+      actionable:   { label: 'Actionable',   bg: '#fef3c7', color: '#92400e' },
+      notification: { label: 'Notification', bg: '#dbeafe', color: '#1e40af' },
+      promotion:    { label: 'Promotion',    bg: '#f3f4f6', color: '#6b7280' },
+    };
+    const b = badges[data.category] || badges.promotion;
+    document.getElementById('categoryBadge').innerHTML =
+      '<span class="badge" style="background:' + b.bg + ';color:' + b.color + '">' + b.label + '</span>' +
+      (data.reason ? '<span style="font-size:.8rem;color:#6b7280;margin-left:8px">' + esc(data.reason) + '</span>' : '');
+
+    const planContent = document.getElementById('planContent');
+    const approvalActions = document.querySelector('#planCard .approval-actions');
+    const modifyRow = document.getElementById('modifyRow');
+    const draftBox = document.getElementById('draftBox');
+
+    if (data.category === 'actionable' && data.status === 'pending_approval') {
+      document.getElementById('planSubtitle').style.display = 'block';
+      approvalActions.style.display = 'flex';
+      renderPlan(data.proposed_plan);
+    } else if (data.category === 'notification') {
+      document.getElementById('planSubtitle').style.display = 'none';
+      approvalActions.style.display = 'none';
+      modifyRow.style.display = 'none';
+      draftBox.style.display = 'none';
+      planContent.innerHTML =
+        '<p style="font-size:.9rem;color:#374151">This is a notification. No action needed.</p>' +
+        '<button class="btn-outline btn-sm" onclick="submitDecision(\'acknowledged\')">Dismiss</button>';
+    } else {
+      // promotion / no_action
+      document.getElementById('planSubtitle').style.display = 'none';
+      approvalActions.style.display = 'none';
+      modifyRow.style.display = 'none';
+      draftBox.style.display = 'none';
+      planContent.innerHTML =
+        '<p style="font-size:.9rem;color:#6b7280">Promotion / confirmation — no action needed.</p>';
+    }
   }
 
   function renderPlan(plan) {
@@ -455,7 +500,7 @@
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
-      const msgs = { approved: 'Approved! Calendar event is being created.', rejected: 'Plan rejected.', modified: 'Changes submitted.' };
+      const msgs = { approved: 'Approved! Calendar event is being created.', rejected: 'Plan rejected.', modified: 'Changes submitted.', acknowledged: 'Notification dismissed.' };
       showStatus('approvalStatus', msgs[action] || data.message, 'success');
       if (action !== 'modified') document.getElementById('planCard').style.display = 'none';
     } catch (e) {
