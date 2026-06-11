@@ -267,24 +267,39 @@ def route_after_human_review(state: AgentState) -> str:
 def build_agent_graph(checkpointer=None):
     workflow = StateGraph(AgentState)
 
-    # Add Nodes
-    workflow.add_node("planner", extract_and_plan)
+    # Nodes
+    workflow.add_node("classifier", classify_email)
+    workflow.add_node("extractor", extract_and_plan)
+    workflow.add_node("notification_review", notification_review)
     workflow.add_node("human_review", human_review)
     workflow.add_node("executor", execute_plan)
 
-    # Define Edges: planner → human_review (pauses) → conditional → executor or END
-    workflow.set_entry_point("planner")
-    workflow.add_edge("planner", "human_review")
+    # Entry: classify first
+    workflow.set_entry_point("classifier")
+    workflow.add_conditional_edges(
+        "classifier",
+        route_after_classification,
+        {
+            "extract": "extractor",
+            "notify": "notification_review",
+            END: END,
+        },
+    )
+
+    # Notifications pause then end
+    workflow.add_edge("notification_review", END)
+
+    # Actionable: extract -> human review -> execute / re-plan / end
+    workflow.add_edge("extractor", "human_review")
     workflow.add_conditional_edges(
         "human_review",
         route_after_human_review,
         {
             "execute": "executor",
-            "re_plan": "planner",
-            END: END
-        }
+            "re_plan": "extractor",
+            END: END,
+        },
     )
     workflow.add_edge("executor", END)
 
-    # interrupt() inside human_review handles pausing — no interrupt_before needed
     return workflow.compile(checkpointer=checkpointer)

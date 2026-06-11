@@ -43,5 +43,13 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(agent.route_after_classification({}), END)
 
 
+class GraphWiringTests(unittest.TestCase):
+    def test_graph_has_expected_nodes(self):
+        graph = agent.build_agent_graph()
+        node_names = set(graph.get_graph().nodes.keys())
+        for expected in ("classifier", "extractor", "notification_review", "human_review", "executor"):
+            self.assertIn(expected, node_names)
+
+
 if __name__ == "__main__":
     unittest.main()
