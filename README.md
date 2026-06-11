@@ -13,7 +13,7 @@ This project is an AI-powered task scheduler that connects to Gmail and Google C
 ## Project Structure
 
 ```
-ai-task-scheduler
+cadence
 ├── src
 │   ├── services
 │   │   ├── ai_service.py        # Contains AiService for email summarization and task extraction
