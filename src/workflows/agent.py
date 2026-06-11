@@ -145,39 +145,6 @@ async def extract_and_plan(state: AgentState) -> AgentState:
         analysis = await chain.ainvoke({"email_content": state["email_content"]})
         print(f"Groq response received: urgency={analysis.urgency_score}, tasks={len(analysis.tasks)}, events={len(analysis.events)}")
 
-        # Persist tasks to DB
-        try:
-            from src.database import AsyncSessionLocal
-            from src.models.user import User
-            from src.models.task import Task
-            from sqlalchemy import select
-            import uuid as _uuid
-            from datetime import datetime, timezone
-            async with AsyncSessionLocal() as db:
-                result = await db.execute(select(User).where(User.id == _uuid.UUID(state["user_id"])))
-                user = result.scalars().first()
-                if user:
-                    for t in analysis.tasks:
-                        due = None
-                        if t.due_date:
-                            try:
-                                due = datetime.fromisoformat(t.due_date.replace("Z", "+00:00"))
-                            except Exception:
-                                pass
-                        db.add(Task(
-                            user_id=user.id,
-                            email_id=state.get("email_id"),
-                            title=t.title,
-                            description=t.description,
-                            priority=t.priority,
-                            due_date=due,
-                            urgency_score=analysis.urgency_score
-                        ))
-                    await db.commit()
-                    print(f"Saved {len(analysis.tasks)} task(s) to DB.")
-        except Exception as e:
-            print(f"Task persistence failed (non-fatal): {e}")
-
         # Update contact memory in background (fire-and-forget)
         if sender_raw:
             try:
@@ -228,25 +195,47 @@ async def execute_plan(state: AgentState) -> AgentState:
     import uuid
 
     print(f"Executing approved plan for user {state['user_id']}!")
-    
-    # 1. Ensure there are events to schedule
-    analysis = state.get("analysis", {})
-    events_to_schedule = analysis.get("events", [])
-    
-    if not events_to_schedule:
-        print("No events detected to schedule.")
-        return state
 
-    # 2. Fetch User to get OAuth Tokens
+    analysis = state.get("analysis", {})
+
+    # 1. Fetch the user once (needed for both task persistence and calendar)
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(User).where(User.id == uuid.UUID(state['user_id'])))
         user = result.scalars().first()
-        
         if not user:
             print("Error: User not found in DB.")
             return state
 
-    # 3. Create each event via Google Calendar API
+        # 2. Persist approved tasks to the DB (only happens on approval)
+        from src.models.task import Task
+        from datetime import datetime as _dt
+        analysis_tasks = analysis.get("tasks", [])
+        for t in analysis_tasks:
+            due = None
+            if t.get("due_date"):
+                try:
+                    due = _dt.fromisoformat(t["due_date"].replace("Z", "+00:00"))
+                except Exception:
+                    pass
+            db.add(Task(
+                user_id=user.id,
+                email_id=state.get("email_id"),
+                title=t.get("title", ""),
+                description=t.get("description", ""),
+                priority=t.get("priority", "medium"),
+                due_date=due,
+                urgency_score=analysis.get("urgency_score", 5),
+            ))
+        if analysis_tasks:
+            await db.commit()
+            print(f"Persisted {len(analysis_tasks)} approved task(s) to DB.")
+
+    # 3. Create each proposed event via Google Calendar API
+    events_to_schedule = analysis.get("events", [])
+    if not events_to_schedule:
+        print("No events to schedule.")
+        return state
+
     for event in events_to_schedule:
         try:
             print(f"Scheduling: {event['summary']} from {event['start_time']} to {event['end_time']}")
@@ -254,7 +243,7 @@ async def execute_plan(state: AgentState) -> AgentState:
                 user=user,
                 summary=event['summary'],
                 start_time=event['start_time'],
-                end_time=event['end_time']
+                end_time=event['end_time'],
             )
             print(f"Success! Event link: {result['link']}")
         except Exception as e:
