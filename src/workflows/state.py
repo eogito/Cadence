@@ -1,4 +1,4 @@
-from typing import TypedDict, List, Optional
+from typing import TypedDict, List, Optional, Literal
 from pydantic import BaseModel, Field
 
 # --- Pydantic Models for LLM Extraction ---
@@ -16,12 +16,19 @@ class CalendarProposal(BaseModel):
     rationale: str = Field(description="Why this time was proposed based on the email context")
 
 class EmailAnalysis(BaseModel):
-    is_actionable: bool = Field(description="True if the email contains tasks or scheduling requests")
+    is_actionable: bool = Field(default=False, description="True if the email contains tasks or scheduling requests")
+    needs_task: bool = Field(default=False, description="True only if there is a clear task AND a date warranting a calendar event")
     urgency_score: int = Field(default=5, description="Urgency score 1-10: 10=needs reply today, 1=can ignore")
     tasks: List[TaskExtraction] = Field(default_factory=list, description="Extracted tasks")
     events: List[CalendarProposal] = Field(default_factory=list, description="Proposed calendar events")
     needs_reply: bool = Field(default=False, description="True if a reply to this email is needed")
     suggested_reply: str = Field(default="", description="A draft reply to send, if needs_reply is true")
+
+class EmailClassification(BaseModel):
+    category: Literal["actionable", "notification", "promotion"] = Field(
+        description="Primary triage bucket for the email"
+    )
+    reason: str = Field(default="", description="One-line justification for the chosen category")
 
 # --- LangGraph State Definition ---
 
@@ -32,7 +39,8 @@ class AgentState(TypedDict):
     
     # AI Outputs
     analysis: Optional[dict]  # Will store the EmailAnalysis dict
-    
+    classification: Optional[dict]  # Will store the EmailClassification dict
+
     # Human-in-the-loop
     approval_status: Optional[str] # 'pending', 'approved', 'rejected', 'modified'
     human_feedback: Optional[str]  # Instructions if the user modifying the plan
