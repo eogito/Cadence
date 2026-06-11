@@ -5,6 +5,24 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.workflows.state import AgentState, EmailAnalysis
 from src.config import settings
 
+
+def _empty_body_classification(state) -> dict | None:
+    """If the email has no readable text, classify as promotion (no action) without an LLM call."""
+    if not (state.get("email_content") or "").strip():
+        return {"category": "promotion", "reason": "Email had no readable text content."}
+    return None
+
+
+def route_after_classification(state) -> str:
+    """Route from the classifier: actionable -> extract, notification -> notify, else END."""
+    category = (state.get("classification") or {}).get("category", "promotion")
+    if category == "actionable":
+        return "extract"
+    if category == "notification":
+        return "notify"
+    return END
+
+
 # --- Nodes ---
 
 async def extract_and_plan(state: AgentState) -> AgentState:
