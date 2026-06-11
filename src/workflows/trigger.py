@@ -42,10 +42,7 @@ async def process_new_email(email_address: str, message_id: str) -> str:
     }
     
     print(f"4. Triggering AI workflow {thread_id} for {email_address}...")
-    try:
-        await app.ainvoke(initial_state, config)
-        print(f"5. Done! Workflow {thread_id} paused for approval.")
-        print(f"   Fetch the plan at: GET /tasks/pending/{thread_id}")
-    except Exception as e:
-        print(f"ERROR in workflow: {type(e).__name__}: {e}")
+    await app.ainvoke(initial_state, config)
+    print(f"5. Done! Workflow {thread_id} is at a stopping point.")
+    print(f"   Fetch the result at: GET /tasks/pending/{thread_id}")
     return thread_id
