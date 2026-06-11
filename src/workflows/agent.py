@@ -174,8 +174,13 @@ async def extract_and_plan(state: AgentState) -> AgentState:
         raise
 
 async def notification_review(state: AgentState) -> AgentState:
-    """Surface a notification and pause until the user dismisses it."""
-    interrupt(state.get("classification", {}))
+    """Surface a notification and pause until the user dismisses it.
+
+    The pause is one-way: the user resumes via POST /tasks/approve, and the
+    resume value is intentionally ignored — acknowledging a notification has no
+    variants (nothing to approve, reject, or modify), so it always ends here.
+    """
+    interrupt(state.get("classification", {}))  # resume value intentionally ignored
     return {"approval_status": "acknowledged"}
 
 async def human_review(state: AgentState) -> AgentState:
@@ -197,6 +202,12 @@ async def execute_plan(state: AgentState) -> AgentState:
     print(f"Executing approved plan for user {state['user_id']}!")
 
     analysis = state.get("analysis", {})
+
+    # needs_task gates calendar/task creation: only act when the LLM flagged a
+    # concrete task AND date. Otherwise there is nothing to schedule or persist.
+    if not analysis.get("needs_task", True):
+        print("Approved plan has needs_task=false — nothing to schedule or persist.")
+        return state
 
     # 1. Fetch the user once (needed for both task persistence and calendar)
     async with AsyncSessionLocal() as db:

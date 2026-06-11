@@ -51,5 +51,16 @@ class GraphWiringTests(unittest.TestCase):
             self.assertIn(expected, node_names)
 
 
+class NotificationNodeTests(unittest.TestCase):
+    def test_notification_review_acknowledges(self):
+        import asyncio
+        from unittest.mock import patch
+        state = {"classification": {"category": "notification", "reason": "x"}}
+        with patch.object(agent, "interrupt", return_value=None) as mock_interrupt:
+            result = asyncio.run(agent.notification_review(state))
+        mock_interrupt.assert_called_once()
+        self.assertEqual(result["approval_status"], "acknowledged")
+
+
 if __name__ == "__main__":
     unittest.main()
