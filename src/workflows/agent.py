@@ -2,7 +2,7 @@ from langgraph.graph import StateGraph, END
 from langgraph.types import interrupt, Command
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from src.workflows.state import AgentState, EmailAnalysis
+from src.workflows.state import AgentState, EmailAnalysis, EmailClassification
 from src.config import settings
 
 
@@ -21,6 +21,47 @@ def route_after_classification(state) -> str:
     if category == "notification":
         return "notify"
     return END
+
+
+async def classify_email(state: AgentState) -> AgentState:
+    """First pass: bucket the email into actionable / notification / promotion."""
+    skip = _empty_body_classification(state)
+    if skip is not None:
+        print(f"Classifier: empty body -> promotion (no action).")
+        return {"classification": skip}
+
+    llm = ChatGroq(
+        model="llama-3.1-8b-instant",
+        temperature=0,
+        api_key=settings.groq_api_key.get_secret_value(),
+    )
+    structured_llm = llm.with_structured_output(EmailClassification, method="json_mode")
+
+    system_msg = (
+        "You are an email triage assistant. Classify the email into EXACTLY ONE category:\n"
+        "- 'actionable': a person is communicating with the user and it may need a reply, a task, "
+        "or scheduling (meeting requests, deadlines, calls, direct questions from real people).\n"
+        "- 'notification': automated but relevant updates the user should see "
+        "(LinkedIn messages, account/app notifications, system alerts).\n"
+        "- 'promotion': marketing, promotions, newsletters, or pure confirmations/receipts "
+        "(booking confirmations, order receipts) that need no action.\n\n"
+        "Respond ONLY with valid JSON matching this schema:\n"
+        '{{"category": "actionable|notification|promotion", "reason": "one short sentence"}}'
+    )
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", system_msg),
+        ("user", "Subject: {subject}\nFrom: {sender}\n\nBody:\n{body}"),
+    ])
+    chain = prompt | structured_llm
+
+    print("Calling Groq API for email classification...")
+    result = await chain.ainvoke({
+        "subject": state.get("email_subject", ""),
+        "sender": state.get("sender_email", ""),
+        "body": state["email_content"][:2000],
+    })
+    print(f"Classifier: category={result.category} ({result.reason})")
+    return {"classification": result.model_dump()}
 
 
 # --- Nodes ---
