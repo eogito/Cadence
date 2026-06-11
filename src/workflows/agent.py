@@ -10,6 +10,13 @@ from src.config import settings
 async def extract_and_plan(state: AgentState) -> AgentState:
     """Uses LLM to extract tasks and propose calendar events from the email."""
 
+    # Guard: never ask the LLM to extract tasks from an empty body — it will
+    # hallucinate. An email with no readable text is simply not actionable.
+    if not (state.get("email_content") or "").strip():
+        print("Email body empty after extraction — marking non-actionable, skipping LLM.")
+        empty = EmailAnalysis(is_actionable=False, urgency_score=1)
+        return {"analysis": empty.model_dump(), "approval_status": "pending"}
+
     feedback_context = f"\nUser Feedback on previous plan: {state.get('human_feedback')}" if state.get('human_feedback') else ""
 
     # Fetch contact memory context from DB
