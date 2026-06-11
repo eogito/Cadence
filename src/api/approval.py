@@ -18,18 +18,34 @@ class ApprovalRequest(BaseModel):
 
 @router.get("/pending/{thread_id}")
 async def get_pending_plan(thread_id: str):
-    """Retrieves the current paused AI state waiting for approval."""
+    """Return the paused/finished workflow state, category-aware, with the full email."""
     app = build_agent_graph(memory_checkpointer)
     config = {"configurable": {"thread_id": thread_id}}
-    state = await app.aget_state(config)
+    snapshot = await app.aget_state(config)
 
-    if not state or not state.next:
-        return {"status": "no pending actions"}
+    values = snapshot.values if snapshot else {}
+    classification = values.get("classification") or {}
+    category = classification.get("category", "promotion")
+    paused = bool(snapshot and snapshot.next)
+
+    if category == "actionable" and paused:
+        status = "pending_approval"
+    elif category == "notification" and paused:
+        status = "notification"
+    else:
+        status = "no_action"
 
     return {
         "thread_id": thread_id,
-        "status": "pending_approval",
-        "proposed_plan": state.values.get("analysis")
+        "category": category,
+        "reason": classification.get("reason", ""),
+        "status": status,
+        "proposed_plan": values.get("analysis") if category == "actionable" else None,
+        "email": {
+            "subject": values.get("email_subject", ""),
+            "sender": values.get("sender_email", ""),
+            "body": values.get("email_content", ""),
+        },
     }
 
 @router.post("/approve")
