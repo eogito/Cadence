@@ -54,7 +54,12 @@ async def approve_plan(request: ApprovalRequest):
     app = build_agent_graph(memory_checkpointer)
     config = {"configurable": {"thread_id": request.thread_id}}
 
-    # Resume the interrupted human_review node with the decision
+    # Only paused workflows can be resumed
+    snapshot = await app.aget_state(config)
+    if not (snapshot and snapshot.next):
+        raise HTTPException(status_code=409, detail="Workflow is not paused; nothing to resume.")
+
+    # Resume the interrupted human_review / notification_review node with the decision
     await app.ainvoke(
         Command(resume={"action": request.action, "feedback": request.feedback}),
         config

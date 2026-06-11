@@ -205,7 +205,7 @@ async def execute_plan(state: AgentState) -> AgentState:
 
     # needs_task gates calendar/task creation: only act when the LLM flagged a
     # concrete task AND date. Otherwise there is nothing to schedule or persist.
-    if not analysis.get("needs_task", True):
+    if not analysis.get("needs_task", False):
         print("Approved plan has needs_task=false — nothing to schedule or persist.")
         return state
 
