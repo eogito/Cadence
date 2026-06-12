@@ -5,28 +5,17 @@ from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from src.database import get_db
-from src.config import settings
 from src.models.user import User
 from src.api.deps import current_user
+from src.config import settings
+from src.services.ms_auth import SCOPES, build_msal_app
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
-
-# Delegated Microsoft Graph scopes. MSAL adds the reserved openid/profile/offline_access.
-SCOPES = ["User.Read", "Mail.Read", "Mail.Send", "Calendars.ReadWrite"]
-
-
-def _build_msal_app(cache: msal.SerializableTokenCache | None = None) -> msal.ConfidentialClientApplication:
-    return msal.ConfidentialClientApplication(
-        client_id=settings.ms_client_id,
-        authority=settings.ms_authority,
-        client_credential=settings.ms_client_secret.get_secret_value(),
-        token_cache=cache,
-    )
 
 
 @router.get("/login")
 async def login(request: Request):
-    app = _build_msal_app()
+    app = build_msal_app()
     flow = await asyncio.to_thread(
         app.initiate_auth_code_flow, SCOPES, redirect_uri=settings.ms_redirect_uri
     )
@@ -41,7 +30,7 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)):
         return JSONResponse({"detail": "No auth flow in session. Start at /auth/login."}, status_code=400)
 
     cache = msal.SerializableTokenCache()
-    app = _build_msal_app(cache)
+    app = build_msal_app(cache)
     result = await asyncio.to_thread(
         app.acquire_token_by_auth_code_flow, flow, dict(request.query_params)
     )
