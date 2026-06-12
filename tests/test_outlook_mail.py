@@ -67,5 +67,16 @@ class SendMailPayloadTests(unittest.TestCase):
         self.assertTrue(payload["saveToSentItems"])
 
 
+from src.services.outlook_calendar_service import OutlookCalendarService
+
+
+class CalendarPayloadTests(unittest.TestCase):
+    def test_event_body_strips_trailing_z(self):
+        body = OutlookCalendarService._event_body("Sync", "2026-06-15T14:00:00Z", "2026-06-15T15:00:00Z")
+        self.assertEqual(body["subject"], "Sync")
+        self.assertEqual(body["start"], {"dateTime": "2026-06-15T14:00:00", "timeZone": "UTC"})
+        self.assertEqual(body["end"], {"dateTime": "2026-06-15T15:00:00", "timeZone": "UTC"})
+
+
 if __name__ == "__main__":
     unittest.main()
