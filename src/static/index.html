@@ -137,7 +137,6 @@
       <h2>Step 1 — Process Latest Email</h2>
       <p class="subtitle">Fetch your latest email, extract tasks and propose calendar events.</p>
       <div class="row">
-        <input type="email" id="emailInput" value="glenlin7813@gmail.com" />
         <button class="btn-primary" id="triggerBtn" onclick="triggerWorkflow()">Run AI</button>
       </div>
       <div id="triggerStatus" class="status hidden"></div>
@@ -182,7 +181,6 @@
       <h2>Morning Briefing</h2>
       <p class="subtitle">AI categorizes your unread emails and summarizes today's calendar.</p>
       <div class="row">
-        <input type="email" id="briefingEmail" value="glenlin7813@gmail.com" />
         <button class="btn-primary" id="briefingBtn" onclick="getBriefing()">Generate</button>
       </div>
       <div id="briefingStatus" class="status hidden"></div>
@@ -259,13 +257,10 @@
     <!-- Email sections to track -->
     <div class="card">
       <h2>Email Sections to Track</h2>
-      <p class="subtitle">Choose which Gmail tabs the AI scans (Process Latest Email + Morning Briefing). Deselecting a section excludes it from tracking.</p>
+      <p class="subtitle">Choose which part of your Outlook inbox the AI scans. Focused is your important mail; Other is everything else.</p>
       <div id="emailSectionsBoxes" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;font-size:.9rem">
-        <label><input type="checkbox" value="primary"> Primary</label>
-        <label><input type="checkbox" value="social"> Social</label>
-        <label><input type="checkbox" value="promotions"> Promotions</label>
-        <label><input type="checkbox" value="updates"> Updates</label>
-        <label><input type="checkbox" value="forums"> Forums</label>
+        <label><input type="checkbox" value="focused"> Focused</label>
+        <label><input type="checkbox" value="other"> Other</label>
       </div>
       <button class="btn-primary" id="saveSectionsBtn" onclick="saveEmailSections()">Save Sections</button>
       <div id="sectionsStatus" class="status hidden"></div>
@@ -422,12 +417,11 @@
 
   // Feature 1
   async function triggerWorkflow() {
-    const email = document.getElementById('emailInput').value.trim();
     setLoading('triggerBtn', true, 'Run AI');
     showStatus('triggerStatus', 'Calling AI - this may take 10-15 seconds...', 'info');
     document.getElementById('planCard').style.display = 'none';
     try {
-      const res = await fetch(API + '/test/trigger?email=' + encodeURIComponent(email), { method: 'POST' });
+      const res = await fetch(API + '/test/trigger', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
       currentThreadId = data.thread_id;
@@ -572,12 +566,11 @@
 
   // Feature 2
   async function getBriefing() {
-    const email = document.getElementById('briefingEmail').value.trim();
     setLoading('briefingBtn', true, 'Generate');
     showStatus('briefingStatus', 'Fetching calendar and emails...', 'info');
     document.getElementById('briefingResult').style.display = 'none';
     try {
-      const res = await fetch(API + '/briefing?email=' + encodeURIComponent(email));
+      const res = await fetch(API + '/briefing');
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
       if (!data.categorized_emails) throw new Error('Unexpected response: ' + JSON.stringify(data));
