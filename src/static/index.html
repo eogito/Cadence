@@ -125,6 +125,7 @@
     <button onclick="showTab('contactsTab', this)">Contacts</button>
     <button onclick="showTab('rulesTab', this)">My Rules</button>
     <button onclick="showTab('scheduleTab', this)">Daily Schedule</button>
+    <span id="authArea" style="margin-left:16px;font-size:.8rem;display:flex;align-items:center"></span>
   </nav>
 </header>
 
@@ -391,6 +392,22 @@
 
   function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  async function checkAuth() {
+    const el = document.getElementById('authArea');
+    try {
+      const res = await fetch(API + '/auth/me');
+      if (res.ok) {
+        const data = await res.json();
+        el.innerHTML = 'Signed in as ' + esc(data.email) +
+          ' &middot; <a href="/auth/logout" style="color:#93c5fd">Sign out</a>';
+      } else {
+        el.innerHTML = '<a href="/auth/login" style="color:#93c5fd;font-weight:600">Sign in with Microsoft</a>';
+      }
+    } catch (e) {
+      el.innerHTML = '<a href="/auth/login" style="color:#93c5fd;font-weight:600">Sign in with Microsoft</a>';
+    }
   }
 
   function fmtTime(iso) {
@@ -958,6 +975,9 @@
 
   // Populate email-section checkboxes on first page load
   loadEmailSections();
+
+  // Reflect Microsoft sign-in state in the header
+  checkAuth();
 </script>
 </body>
 </html>

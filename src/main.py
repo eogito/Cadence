@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
+from starlette.middleware.sessions import SessionMiddleware
+from src.config import settings
 from src.database import engine, Base
 from src.api.auth import router as auth_router
 from src.api.webhook import router as webhook_router
@@ -40,6 +42,13 @@ app = FastAPI(
     title="AI Task Secretary API",
     version="0.1.0",
     lifespan=lifespan
+)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret.get_secret_value(),
+    same_site="lax",
+    https_only=False,  # set True behind HTTPS in deployment (sub-project #3)
 )
 
 app.include_router(auth_router)

@@ -1,97 +1,82 @@
-import os
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+import asyncio
+import msal
+from fastapi import APIRouter, Request, Depends
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from google_auth_oauthlib.flow import Flow
-from google.oauth2 import id_token
-from google.auth.transport import requests
 from src.database import get_db
 from src.config import settings
 from src.models.user import User
-
-# Allow HTTP traffic for local development testing
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+from src.api.deps import current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-# MVP in-memory store for OAuth state
-oauth_state_store = {}
+# Delegated Microsoft Graph scopes. MSAL adds the reserved openid/profile/offline_access.
+SCOPES = ["User.Read", "Mail.Read", "Mail.Send", "Calendars.ReadWrite"]
 
-SCOPES = [
-    "openid",
-    "https://www.googleapis.com/auth/userinfo.email",
-    "https://www.googleapis.com/auth/gmail.readonly",
-    "https://www.googleapis.com/auth/calendar.events"
-]
 
-def get_google_flow() -> Flow:
-    return Flow.from_client_config(
-        {
-            "web": {
-                "client_id": settings.google_client_id,
-                "client_secret": settings.google_client_secret.get_secret_value(),
-                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                "token_uri": "https://oauth2.googleapis.com/token",
-            }
-        },
-        scopes=SCOPES,
-        redirect_uri=settings.google_redirect_uri
+def _build_msal_app(cache: msal.SerializableTokenCache | None = None) -> msal.ConfidentialClientApplication:
+    return msal.ConfidentialClientApplication(
+        client_id=settings.ms_client_id,
+        authority=settings.ms_authority,
+        client_credential=settings.ms_client_secret.get_secret_value(),
+        token_cache=cache,
     )
 
+
 @router.get("/login")
-async def login():
-    flow = get_google_flow()
-    authorization_url, state = flow.authorization_url(access_type="offline", prompt="consent")
-    
-    # Save the generated code verifier so the callback can prove who it is
-    oauth_state_store[state] = getattr(flow, 'code_verifier', None)
-    
-    return RedirectResponse(url=authorization_url)
+async def login(request: Request):
+    app = _build_msal_app()
+    flow = await asyncio.to_thread(
+        app.initiate_auth_code_flow, SCOPES, redirect_uri=settings.ms_redirect_uri
+    )
+    request.session["auth_flow"] = flow  # carries state + PKCE verifier
+    return RedirectResponse(flow["auth_uri"])
 
 
 @router.get("/callback")
 async def callback(request: Request, db: AsyncSession = Depends(get_db)):
-    flow = get_google_flow()
-    
-    # Retrieve the code verifier using the state parameter returned by Google
-    state = request.query_params.get("state")
-    if state in oauth_state_store:
-        flow.code_verifier = oauth_state_store.pop(state)
-        
-    flow.fetch_token(authorization_response=str(request.url))
-    credentials = flow.credentials
-    
-    # Extract the user's real email from the Google ID token securely
-    token_request = requests.Request()
-    id_info = id_token.verify_oauth2_token(
-        id_token=credentials.id_token, 
-        request=token_request, 
-        audience=settings.google_client_id
+    flow = request.session.pop("auth_flow", None)
+    if not flow:
+        return JSONResponse({"detail": "No auth flow in session. Start at /auth/login."}, status_code=400)
+
+    cache = msal.SerializableTokenCache()
+    app = _build_msal_app(cache)
+    result = await asyncio.to_thread(
+        app.acquire_token_by_auth_code_flow, flow, dict(request.query_params)
     )
-    user_email = id_info.get("email")
-    
-    creds_dict = {
-        "token": credentials.token,
-        "refresh_token": credentials.refresh_token,
-        "token_uri": credentials.token_uri,
-        "client_id": credentials.client_id,
-        "client_secret": credentials.client_secret,
-        "scopes": credentials.scopes
-    }
+    if "error" in result:
+        return JSONResponse(
+            {"detail": result.get("error_description", result["error"])}, status_code=400
+        )
 
-    # Safely check if user already exists
-    result = await db.execute(select(User).where(User.email == user_email))
-    user = result.scalars().first()
+    claims = result.get("id_token_claims", {})
+    email = (claims.get("preferred_username") or claims.get("email") or "").lower()
+    account_id = claims.get("oid") or claims.get("sub")
+    if not email:
+        return JSONResponse({"detail": "Could not read account email from Microsoft."}, status_code=400)
 
-    if user:
-        # Update existing user's tokens
-        user.google_oauth_tokens = creds_dict
-    else:
-        # Create new user
-        user = User(email=user_email, google_oauth_tokens=creds_dict)
+    res = await db.execute(select(User).where(User.email == email))
+    user = res.scalars().first()
+    if user is None:
+        user = User(email=email)
         db.add(user)
-        
+    user.ms_token_cache = cache.serialize()
+    user.ms_account_id = account_id
     await db.commit()
-    
-    return {"message": f"Successfully authenticated as {user_email}", "user_id": str(user.id)}
+    await db.refresh(user)
+
+    request.session["user_id"] = str(user.id)
+    return RedirectResponse("/")
+
+
+@router.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse("/")
+
+
+@router.get("/me")
+async def me(user: User = Depends(current_user)):
+    """Return the signed-in user's identity (used by the frontend to show login state)."""
+    return {"authenticated": True, "email": user.email}
