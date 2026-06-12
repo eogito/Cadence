@@ -1,13 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 from typing import List
 from src.database import get_db
 from src.models.user import User
-from src.services.gmail_service import GmailService
+from src.api.deps import current_user
+from src.services.outlook_mail_service import OutlookMailService
 from src.services.calendar_service import CalendarService
 from src.services.email_preferences_service import get_tracked_categories
 from src.config import settings
@@ -31,19 +31,14 @@ class BriefingAnalysis(BaseModel):
 
 @router.get("")
 async def get_daily_briefing(
-    email: str = "glenlin7813@gmail.com",
-    db: AsyncSession = Depends(get_db)
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Generate a structured morning briefing with categorized emails."""
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     categories = await get_tracked_categories(db, user)
     events, emails = await asyncio.gather(
         CalendarService.get_upcoming_events(user, days_ahead=1),
-        GmailService.get_unread_emails(user, max_results=15, categories=categories)
+        OutlookMailService.get_unread_emails(user, max_results=15, classification=categories),
     )
 
     events_text = json.dumps(events, indent=2) if events else "No events today."
