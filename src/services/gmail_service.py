@@ -5,6 +5,7 @@ from email.mime.text import MIMEText
 from typing import Dict, Any, Optional, List, Tuple
 from src.services.google_auth import GoogleAuthService
 from src.models.user import User
+from src.models.email_preferences import VALID_CATEGORIES
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -78,12 +79,33 @@ class GmailService:
         return ""
 
     @staticmethod
-    async def get_unread_emails(user: User, max_results: int = 10) -> List[Dict[str, Any]]:
-        """Fetch recent unread emails for the daily briefing."""
+    def build_category_filter(categories) -> str:
+        """Build a Gmail search filter for the selected inbox sections.
+
+        - all valid sections selected -> "" (no filter, matches everything)
+        - empty selection -> a sentinel query that matches no mail
+        - otherwise -> 'category:X' or '(category:X OR category:Y ...)'
+        """
+        cats = [c for c in categories if c in VALID_CATEGORIES]
+        if not cats:
+            return "category:__none__"
+        if set(cats) == set(VALID_CATEGORIES):
+            return ""
+        if len(cats) == 1:
+            return f"category:{cats[0]}"
+        return "(" + " OR ".join(f"category:{c}" for c in cats) + ")"
+
+    @staticmethod
+    async def get_unread_emails(user: User, max_results: int = 10, categories=None) -> List[Dict[str, Any]]:
+        """Fetch recent unread emails for the daily briefing, optionally limited to sections."""
         service = await GoogleAuthService.get_gmail_service(user)
+        q = "is:unread"
+        if categories is not None:
+            filt = GmailService.build_category_filter(categories)
+            q = (q + " " + filt).strip()
         response = await asyncio.to_thread(
             lambda: service.users().messages().list(
-                userId="me", q="is:unread", maxResults=max_results
+                userId="me", q=q, maxResults=max_results
             ).execute()
         )
         messages = response.get("messages", [])
