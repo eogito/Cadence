@@ -4,8 +4,8 @@ from sqlalchemy import Column, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from src.database import Base
 
-VALID_CATEGORIES = ["primary", "social", "promotions", "updates", "forums"]
-DEFAULT_CATEGORIES = ["primary", "updates"]
+VALID_CATEGORIES = ["focused", "other"]
+DEFAULT_CATEGORIES = ["focused"]
 
 
 class EmailPreferences(Base):
