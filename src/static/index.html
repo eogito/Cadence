@@ -255,6 +255,21 @@
   <!-- TAB 6: My Rules -->
   <div id="rulesTab" class="tab">
 
+    <!-- Email sections to track -->
+    <div class="card">
+      <h2>Email Sections to Track</h2>
+      <p class="subtitle">Choose which Gmail tabs the AI scans (Process Latest Email + Morning Briefing). Deselecting a section excludes it from tracking.</p>
+      <div id="emailSectionsBoxes" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:12px;font-size:.9rem">
+        <label><input type="checkbox" value="primary"> Primary</label>
+        <label><input type="checkbox" value="social"> Social</label>
+        <label><input type="checkbox" value="promotions"> Promotions</label>
+        <label><input type="checkbox" value="updates"> Updates</label>
+        <label><input type="checkbox" value="forums"> Forums</label>
+      </div>
+      <button class="btn-primary" id="saveSectionsBtn" onclick="saveEmailSections()">Save Sections</button>
+      <div id="sectionsStatus" class="status hidden"></div>
+    </div>
+
     <!-- Add personal context -->
     <div class="card">
       <h2>Add Personal Context</h2>
@@ -856,7 +871,41 @@
     }
   }
 
+  async function loadEmailSections() {
+    const email = document.getElementById('rulesEmail').value.trim();
+    try {
+      const res = await fetch(API + '/settings/email-sections?email=' + encodeURIComponent(email));
+      const data = await res.json();
+      if (!res.ok) return;
+      const set = new Set(data.tracked_categories || []);
+      document.querySelectorAll('#emailSectionsBoxes input[type=checkbox]').forEach(cb => {
+        cb.checked = set.has(cb.value);
+      });
+    } catch (e) { /* leave boxes as-is on error */ }
+  }
+
+  async function saveEmailSections() {
+    const email = document.getElementById('rulesEmail').value.trim();
+    const cats = Array.from(document.querySelectorAll('#emailSectionsBoxes input[type=checkbox]'))
+      .filter(cb => cb.checked).map(cb => cb.value);
+    setLoading('saveSectionsBtn', true, 'Save Sections');
+    try {
+      const res = await fetch(API + '/settings/email-sections', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, tracked_categories: cats })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      showStatus('sectionsStatus', 'Saved! Tracking: ' + (cats.join(', ') || 'none'), 'success');
+    } catch (e) {
+      showStatus('sectionsStatus', 'Error: ' + e.message, 'error');
+    } finally {
+      setLoading('saveSectionsBtn', false, 'Save Sections');
+    }
+  }
+
   async function loadRulesTab() {
+    loadEmailSections();
     const email = document.getElementById('rulesEmail').value.trim();
     try {
       const [ctxRes, rulesRes] = await Promise.all([
@@ -906,6 +955,9 @@
       showStatus('rulesStatus', 'Error: ' + e.message, 'error');
     }
   }
+
+  // Populate email-section checkboxes on first page load
+  loadEmailSections();
 </script>
 </body>
 </html>
