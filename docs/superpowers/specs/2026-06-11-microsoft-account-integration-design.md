@@ -32,6 +32,16 @@ The LangGraph/Groq AI workflow is provider-agnostic and stays unchanged; only th
 - **Graph access:** thin async `httpx` client + `msal` library (not the heavier `msgraph-sdk`).
 - **Session:** Starlette `SessionMiddleware` (signed HttpOnly cookie holding `user_id`).
 
+## Delivery slices (one implementation plan + session each)
+
+To stay within a single work session per chunk, sub-project #1 is built in three sequential slices, each ending committable and runnable:
+
+- **Slice 1 — Auth foundation:** `config.py` (MS + session secret), `User` model (`ms_token_cache`/`ms_account_id`), `auth.py` rewritten to MSAL login/callback/logout, `SessionMiddleware`, the `current_user` dependency, and a "Sign in with Microsoft" button that shows the signed-in identity (from Graph `/me`). *Done = login works.* Mail/calendar features are temporarily inert until Slice 2.
+- **Slice 2 — Outlook mail (read):** `MicrosoftAuthService` token provider + `OutlookMailService`; wire Process Latest Email and Morning Briefing (with the Focused/Other filter).
+- **Slice 3 — Outlook calendar + send + cleanup:** `OutlookCalendarService`, Graph `sendMail` for draft replies, Meeting Prep; finish the `current_user` sweep and remove the dead Google code.
+
+The sections below describe the full end-state design that these slices add up to.
+
 ## Architecture
 
 ```
