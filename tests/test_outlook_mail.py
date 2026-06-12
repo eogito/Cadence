@@ -55,5 +55,17 @@ class ClassificationFilterTests(unittest.TestCase):
         )
 
 
+class SendMailPayloadTests(unittest.TestCase):
+    def test_sendmail_payload_shape(self):
+        payload = OutlookMailService._sendmail_payload("a@b.com", "Hi", "Body text")
+        self.assertEqual(payload["message"]["subject"], "Hi")
+        self.assertEqual(payload["message"]["body"], {"contentType": "Text", "content": "Body text"})
+        self.assertEqual(
+            payload["message"]["toRecipients"],
+            [{"emailAddress": {"address": "a@b.com"}}],
+        )
+        self.assertTrue(payload["saveToSentItems"])
+
+
 if __name__ == "__main__":
     unittest.main()

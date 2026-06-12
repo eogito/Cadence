@@ -29,6 +29,19 @@ class OutlookMailService:
         return f"inferenceClassification eq '{valid[0]}'"
 
     @staticmethod
+    async def _graph_post(user: User, path: str, json_body: dict) -> dict:
+        token = await MicrosoftAuthService.get_access_token(user)
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                f"{GRAPH_BASE}{path}",
+                headers={"Authorization": f"Bearer {token}"},
+                json=json_body,
+            )
+        if resp.status_code >= 400:
+            raise RuntimeError(f"Graph error {resp.status_code}: {resp.text[:300]}")
+        return resp.json() if resp.content else {}
+
+    @staticmethod
     async def _graph_get(user: User, path: str, params: dict) -> dict:
         token = await MicrosoftAuthService.get_access_token(user)
         async with httpx.AsyncClient(timeout=30) as client:
@@ -79,6 +92,40 @@ class OutlookMailService:
             "date": message.get("receivedDateTime", ""),
             "body": OutlookMailService._body_text(message).strip(),
         }
+
+    @staticmethod
+    def _sendmail_payload(to: str, subject: str, body: str) -> dict:
+        return {
+            "message": {
+                "subject": subject,
+                "body": {"contentType": "Text", "content": body},
+                "toRecipients": [{"emailAddress": {"address": to}}],
+            },
+            "saveToSentItems": True,
+        }
+
+    @staticmethod
+    async def send_email(user: User, to: str, subject: str, body: str) -> dict:
+        await OutlookMailService._graph_post(user, "/me/sendMail", OutlookMailService._sendmail_payload(to, subject, body))
+        return {"status": "sent"}
+
+    @staticmethod
+    async def search_emails_from_sender(user: User, sender_email: str, max_results: int = 5):
+        # No $orderby here: Graph rejects $filter + $orderby on different properties.
+        params = {
+            "$filter": f"from/emailAddress/address eq '{sender_email}'",
+            "$top": str(max_results),
+            "$select": "subject,bodyPreview,receivedDateTime",
+        }
+        data = await OutlookMailService._graph_get(user, "/me/messages", params)
+        return [
+            {
+                "subject": m.get("subject", "No Subject"),
+                "date": m.get("receivedDateTime", ""),
+                "snippet": m.get("bodyPreview", ""),
+            }
+            for m in data.get("value", [])
+        ]
 
     @staticmethod
     async def get_unread_emails(user: User, max_results: int = 10, classification=None) -> List[Dict[str, Any]]:
