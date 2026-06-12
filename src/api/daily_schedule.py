@@ -9,7 +9,7 @@ from src.database import get_db
 from src.models.user import User
 from src.models.task import Task
 from src.models.recurring_rule import RecurringRule
-from src.services.calendar_service import CalendarService
+from src.services.outlook_calendar_service import OutlookCalendarService
 from src.services.user_context_service import list_all_context
 from src.config import settings
 from datetime import datetime, timezone
@@ -88,7 +88,7 @@ async def get_daily_schedule(
     now = datetime.now(timezone.utc)
     today_label = now.strftime("%A, %B ") + str(now.day)  # e.g. "Monday, June 8"
 
-    events_task = CalendarService.get_upcoming_events(user, days_ahead=1)
+    events_task = OutlookCalendarService.get_upcoming_events(user, days_ahead=1)
 
     tasks_query = (
         select(Task)
