@@ -35,6 +35,9 @@ class _HTMLTextExtractor(HTMLParser):
 
 
 class GmailService:
+    # Query returned when the user has selected no sections — matches no mail.
+    NO_SECTIONS_FILTER = "category:__none__"
+
     @staticmethod
     def _html_to_text(html: str) -> str:
         """Convert an HTML email body to readable plain text using only the stdlib."""
@@ -83,12 +86,15 @@ class GmailService:
         """Build a Gmail search filter for the selected inbox sections.
 
         - all valid sections selected -> "" (no filter, matches everything)
-        - empty selection -> a sentinel query that matches no mail
+        - empty selection -> NO_SECTIONS_FILTER, a sentinel that matches no mail
         - otherwise -> 'category:X' or '(category:X OR category:Y ...)'
+
+        Unknown values are silently dropped. Input reaching here has already
+        been validated at the API layer (callers pass only saved selections).
         """
         cats = [c for c in categories if c in VALID_CATEGORIES]
         if not cats:
-            return "category:__none__"
+            return GmailService.NO_SECTIONS_FILTER
         if set(cats) == set(VALID_CATEGORIES):
             return ""
         if len(cats) == 1:
@@ -102,6 +108,8 @@ class GmailService:
         q = "is:unread"
         if categories is not None:
             filt = GmailService.build_category_filter(categories)
+            if filt == GmailService.NO_SECTIONS_FILTER:
+                return []  # user tracks no sections — nothing to fetch
             q = (q + " " + filt).strip()
         response = await asyncio.to_thread(
             lambda: service.users().messages().list(

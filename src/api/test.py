@@ -27,6 +27,8 @@ async def trigger_latest_email(
         service = await GoogleAuthService.get_gmail_service(user)
         categories = await get_tracked_categories(db, user)
         q = GmailService.build_category_filter(categories)
+        if q == GmailService.NO_SECTIONS_FILTER:
+            return {"message": "No emails found in your tracked sections."}
         list_kwargs = {"userId": "me", "maxResults": 1}
         if q:
             list_kwargs["q"] = q

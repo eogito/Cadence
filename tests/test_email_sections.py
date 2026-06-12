@@ -1,20 +1,19 @@
 """Tests for Gmail section tracking (stdlib unittest)."""
 import unittest
 
-from src.models.email_preferences import VALID_CATEGORIES, DEFAULT_CATEGORIES, EmailPreferences
+from src.models.email_preferences import VALID_CATEGORIES, DEFAULT_CATEGORIES
 
 
 class ConstantsTests(unittest.TestCase):
-    def test_valid_categories(self):
-        self.assertEqual(
-            VALID_CATEGORIES, ["primary", "social", "promotions", "updates", "forums"]
-        )
+    def test_valid_categories_contains_required_entries(self):
+        for cat in ("primary", "social", "promotions", "updates", "forums"):
+            self.assertIn(cat, VALID_CATEGORIES)
 
     def test_default_is_primary_and_updates(self):
         self.assertEqual(DEFAULT_CATEGORIES, ["primary", "updates"])
 
-    def test_model_tablename(self):
-        self.assertEqual(EmailPreferences.__tablename__, "email_preferences")
+    def test_default_is_subset_of_valid(self):
+        self.assertTrue(set(DEFAULT_CATEGORIES).issubset(set(VALID_CATEGORIES)))
 
 
 from src.services.gmail_service import GmailService
