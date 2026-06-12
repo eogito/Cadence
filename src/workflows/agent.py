@@ -196,7 +196,7 @@ async def execute_plan(state: AgentState) -> AgentState:
     from src.database import AsyncSessionLocal
     from src.models.user import User
     from sqlalchemy import select
-    from src.services.calendar_service import CalendarService
+    from src.services.outlook_calendar_service import OutlookCalendarService
     import uuid
 
     print(f"Executing approved plan for user {state['user_id']}!")
@@ -250,7 +250,7 @@ async def execute_plan(state: AgentState) -> AgentState:
     for event in events_to_schedule:
         try:
             print(f"Scheduling: {event['summary']} from {event['start_time']} to {event['end_time']}")
-            result = await CalendarService.create_event(
+            result = await OutlookCalendarService.create_event(
                 user=user,
                 summary=event['summary'],
                 start_time=event['start_time'],
