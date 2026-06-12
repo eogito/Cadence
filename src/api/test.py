@@ -4,6 +4,8 @@ from sqlalchemy import select
 from src.database import get_db
 from src.models.user import User
 from src.services.google_auth import GoogleAuthService
+from src.services.gmail_service import GmailService
+from src.services.email_preferences_service import get_tracked_categories
 from src.workflows.trigger import process_new_email
 import asyncio
 
@@ -23,12 +25,17 @@ async def trigger_latest_email(
     # 2. Ask Google for your latest email ID
     try:
         service = await GoogleAuthService.get_gmail_service(user)
+        categories = await get_tracked_categories(db, user)
+        q = GmailService.build_category_filter(categories)
+        list_kwargs = {"userId": "me", "maxResults": 1}
+        if q:
+            list_kwargs["q"] = q
         response = await asyncio.to_thread(
-            lambda: service.users().messages().list(userId='me', maxResults=1).execute()
+            lambda: service.users().messages().list(**list_kwargs).execute()
         )
         messages = response.get('messages', [])
         if not messages:
-            return {"message": "No emails found in inbox."}
+            return {"message": "No emails found in your tracked sections."}
             
         latest_message_id = messages[0]['id']
         print(f"Found latest email ID: {latest_message_id}")
