@@ -7,7 +7,7 @@ from src.database import get_db
 from src.models.user import User
 from src.workflows.agent import build_agent_graph
 from src.workflows.trigger import memory_checkpointer
-from src.services.gmail_service import GmailService
+from src.services.outlook_mail_service import OutlookMailService
 
 router = APIRouter(prefix="/tasks", tags=["Approvals"])
 
@@ -82,5 +82,5 @@ async def send_draft_reply(request: DraftSendRequest, db: AsyncSession = Depends
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
-    sent = await GmailService.send_email(user, to=request.to, subject=request.subject, body=request.body)
-    return {"message": "Email sent successfully.", "gmail_message_id": sent.get("message_id")}
+    sent = await OutlookMailService.send_email(user, to=request.to, subject=request.subject, body=request.body)
+    return {"message": "Email sent successfully.", "status": sent.get("status")}
