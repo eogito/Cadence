@@ -8,7 +8,7 @@ from src.database import get_db
 from src.models.user import User
 from src.api.deps import current_user
 from src.services.outlook_mail_service import OutlookMailService
-from src.services.calendar_service import CalendarService
+from src.services.outlook_calendar_service import OutlookCalendarService
 from src.services.email_preferences_service import get_tracked_categories
 from src.config import settings
 import json, asyncio
@@ -37,7 +37,7 @@ async def get_daily_briefing(
     """Generate a structured morning briefing with categorized emails."""
     categories = await get_tracked_categories(db, user)
     events, emails = await asyncio.gather(
-        CalendarService.get_upcoming_events(user, days_ahead=1),
+        OutlookCalendarService.get_upcoming_events(user, days_ahead=1),
         OutlookMailService.get_unread_emails(user, max_results=15, classification=categories),
     )
 
