@@ -9,24 +9,22 @@ GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 
 class OutlookMailService:
-    # A $filter that matches no mail — used when the user tracks no classifications.
-    NO_MAIL_FILTER = "id eq 'NONE'"
-
     @staticmethod
-    def build_classification_filter(classes) -> str:
-        """Graph $filter fragment for Focused/Other selection.
+    def _allowed_classifications(classes):
+        """Which inferenceClassification values to keep, decided client-side.
 
-        - both selected -> "" (no classification filter)
-        - one selected  -> inferenceClassification eq '<class>'
-        - none selected -> NO_MAIL_FILTER (matches nothing)
-        Unknown values are dropped.
+        Returns None to keep all (both selected), an empty set to keep none
+        (nothing selected), or the set of selected values. Filtering is done in
+        Python because Graph rejects a $filter on inferenceClassification combined
+        with an $orderby on receivedDateTime (error: InefficientFilter). Unknown
+        values are dropped.
         """
         valid = [c for c in classes if c in VALID_CATEGORIES]
         if not valid:
-            return OutlookMailService.NO_MAIL_FILTER
+            return set()
         if set(valid) == set(VALID_CATEGORIES):
-            return ""
-        return f"inferenceClassification eq '{valid[0]}'"
+            return None
+        return set(valid)
 
     @staticmethod
     async def _graph_post(user: User, path: str, json_body: dict) -> dict:
@@ -68,16 +66,18 @@ class OutlookMailService:
 
     @staticmethod
     async def get_latest_message_id(user: User, classification=None) -> Optional[str]:
-        params = {"$top": "1", "$orderby": "receivedDateTime desc", "$select": "id"}
+        allowed = None
         if classification is not None:
-            filt = OutlookMailService.build_classification_filter(classification)
-            if filt == OutlookMailService.NO_MAIL_FILTER:
-                return None
-            if filt:
-                params["$filter"] = filt
+            allowed = OutlookMailService._allowed_classifications(classification)
+            if allowed is not None and not allowed:
+                return None  # user tracks no sections
+        # Order by date only (no inferenceClassification $filter); match client-side.
+        params = {"$top": "25", "$orderby": "receivedDateTime desc", "$select": "id,inferenceClassification"}
         data = await OutlookMailService._graph_get(user, "/me/messages", params)
-        items = data.get("value", [])
-        return items[0]["id"] if items else None
+        for m in data.get("value", []):
+            if allowed is None or m.get("inferenceClassification") in allowed:
+                return m.get("id")
+        return None
 
     @staticmethod
     async def get_email_content(user: User, message_id: str) -> Optional[Dict[str, Any]]:
@@ -129,21 +129,24 @@ class OutlookMailService:
 
     @staticmethod
     async def get_unread_emails(user: User, max_results: int = 10, classification=None) -> List[Dict[str, Any]]:
+        allowed = None
+        if classification is not None:
+            allowed = OutlookMailService._allowed_classifications(classification)
+            if allowed is not None and not allowed:
+                return []  # user tracks no sections
+        # isRead filter is fine with the date orderby; classification is matched client-side.
+        fetch_n = max_results if allowed is None else max(max_results * 3, 30)
         params = {
             "$filter": "isRead eq false",
-            "$top": str(max_results),
+            "$top": str(fetch_n),
             "$orderby": "receivedDateTime desc",
-            "$select": "subject,from,bodyPreview,body,receivedDateTime",
+            "$select": "subject,from,bodyPreview,body,receivedDateTime,inferenceClassification",
         }
-        if classification is not None:
-            filt = OutlookMailService.build_classification_filter(classification)
-            if filt == OutlookMailService.NO_MAIL_FILTER:
-                return []
-            if filt:
-                params["$filter"] = f"isRead eq false and {filt}"
         data = await OutlookMailService._graph_get(user, "/me/messages", params)
         results = []
         for m in data.get("value", []):
+            if allowed is not None and m.get("inferenceClassification") not in allowed:
+                continue
             results.append({
                 "message_id": m.get("id"),
                 "subject": m.get("subject", "No Subject"),
@@ -152,4 +155,6 @@ class OutlookMailService:
                 "snippet": m.get("bodyPreview", ""),
                 "body": OutlookMailService._body_text(m).strip()[:500],
             })
+            if len(results) >= max_results:
+                break
         return results

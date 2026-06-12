@@ -34,25 +34,16 @@ from src.services.outlook_mail_service import OutlookMailService
 
 class ClassificationFilterTests(unittest.TestCase):
     def test_focused_only(self):
-        self.assertEqual(
-            OutlookMailService.build_classification_filter(["focused"]),
-            "inferenceClassification eq 'focused'",
-        )
+        self.assertEqual(OutlookMailService._allowed_classifications(["focused"]), {"focused"})
 
-    def test_both_is_empty(self):
-        self.assertEqual(OutlookMailService.build_classification_filter(["focused", "other"]), "")
+    def test_both_is_none(self):
+        self.assertIsNone(OutlookMailService._allowed_classifications(["focused", "other"]))
 
-    def test_empty_is_sentinel(self):
-        self.assertEqual(
-            OutlookMailService.build_classification_filter([]),
-            OutlookMailService.NO_MAIL_FILTER,
-        )
+    def test_empty_is_empty_set(self):
+        self.assertEqual(OutlookMailService._allowed_classifications([]), set())
 
     def test_unknown_values_ignored(self):
-        self.assertEqual(
-            OutlookMailService.build_classification_filter(["focused", "bogus"]),
-            "inferenceClassification eq 'focused'",
-        )
+        self.assertEqual(OutlookMailService._allowed_classifications(["focused", "bogus"]), {"focused"})
 
 
 class SendMailPayloadTests(unittest.TestCase):
