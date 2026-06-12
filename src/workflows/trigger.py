@@ -3,7 +3,7 @@ from sqlalchemy import select
 from langgraph.checkpoint.memory import MemorySaver
 from src.database import AsyncSessionLocal
 from src.models.user import User
-from src.services.gmail_service import GmailService
+from src.services.outlook_mail_service import OutlookMailService
 from src.workflows.agent import build_agent_graph
 
 # MemorySaver avoids psycopg3 Windows event loop deadlocks during local development
@@ -23,7 +23,7 @@ async def process_new_email(email_address: str, message_id: str) -> str:
             return
 
     # 2. Extract email content securely
-    email_data = await GmailService.get_email_content(user, message_id)
+    email_data = await OutlookMailService.get_email_content(user, message_id)
     if not email_data:
         print("Could not fetch email content.")
         return
