@@ -9,6 +9,7 @@ from src.database import get_db
 from src.models.user import User
 from src.services.gmail_service import GmailService
 from src.services.calendar_service import CalendarService
+from src.services.email_preferences_service import get_tracked_categories
 from src.config import settings
 import json, asyncio
 
@@ -39,9 +40,10 @@ async def get_daily_briefing(
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
 
+    categories = await get_tracked_categories(db, user)
     events, emails = await asyncio.gather(
         CalendarService.get_upcoming_events(user, days_ahead=1),
-        GmailService.get_unread_emails(user, max_results=15)
+        GmailService.get_unread_emails(user, max_results=15, categories=categories)
     )
 
     events_text = json.dumps(events, indent=2) if events else "No events today."
