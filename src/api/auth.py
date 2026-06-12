@@ -17,7 +17,9 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 async def login(request: Request):
     app = build_msal_app()
     flow = await asyncio.to_thread(
-        app.initiate_auth_code_flow, SCOPES, redirect_uri=settings.ms_redirect_uri
+        lambda: app.initiate_auth_code_flow(
+            SCOPES, redirect_uri=settings.ms_redirect_uri, prompt="select_account"
+        )
     )
     request.session["auth_flow"] = flow  # carries state + PKCE verifier
     return RedirectResponse(flow["auth_uri"])
