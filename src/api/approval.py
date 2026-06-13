@@ -2,12 +2,12 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from langgraph.types import Command
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from src.database import get_db
 from src.models.user import User
 from src.workflows.agent import build_agent_graph
 from src.workflows.trigger import memory_checkpointer
 from src.services.outlook_mail_service import OutlookMailService
+from src.api.deps import current_user
 
 router = APIRouter(prefix="/tasks", tags=["Approvals"])
 
@@ -72,15 +72,13 @@ class DraftSendRequest(BaseModel):
     to: str
     subject: str
     body: str
-    user_email: str = "glenlin7813@gmail.com"
 
 @router.post("/send-draft")
-async def send_draft_reply(request: DraftSendRequest, db: AsyncSession = Depends(get_db)):
-    """Send an AI-drafted email reply after human approval."""
-    result = await db.execute(select(User).where(User.email == request.user_email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
+async def send_draft_reply(
+    request: DraftSendRequest,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Send an AI-drafted reply from the signed-in user's Outlook account."""
     sent = await OutlookMailService.send_email(user, to=request.to, subject=request.subject, body=request.body)
     return {"message": "Email sent successfully.", "status": sent.get("status")}
