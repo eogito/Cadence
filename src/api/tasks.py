@@ -7,21 +7,18 @@ from src.database import get_db
 from src.models.user import User
 from src.models.task import Task
 from src.models.contact import Contact
+from src.api.deps import current_user
 import uuid
 
 router = APIRouter(prefix="/tasks-list", tags=["Tasks"])
 
 @router.get("")
 async def get_tasks(
-    email: str = "glenlin7813@gmail.com",
     include_completed: bool = False,
+    user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Return all tasks for the user, sorted by urgency and due date. Flags overdue tasks."""
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
 
     query = select(Task).where(Task.user_id == user.id)
     if not include_completed:
@@ -57,9 +54,11 @@ async def get_tasks(
 
 
 @router.patch("/{task_id}/complete")
-async def complete_task(task_id: str, db: AsyncSession = Depends(get_db)):
-    """Mark a task as completed."""
-    result = await db.execute(select(Task).where(Task.id == uuid.UUID(task_id)))
+async def complete_task(task_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Mark one of the signed-in user's tasks completed."""
+    result = await db.execute(
+        select(Task).where(Task.id == uuid.UUID(task_id), Task.user_id == user.id)
+    )
     task = result.scalars().first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found.")
@@ -70,14 +69,10 @@ async def complete_task(task_id: str, db: AsyncSession = Depends(get_db)):
 
 @router.get("/contacts")
 async def get_contacts(
-    email: str = "glenlin7813@gmail.com",
+    user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Return all contact memories for the user."""
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
 
     result = await db.execute(
         select(Contact)
