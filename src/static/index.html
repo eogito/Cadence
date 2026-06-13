@@ -110,6 +110,12 @@
 </head>
 <body>
 
+<div id="signinSplash" style="display:none;text-align:center;margin-top:80px">
+  <h2 style="font-weight:600;margin-bottom:12px">AI Personal Secretary</h2>
+  <p style="color:#6b7280;margin-bottom:20px">Sign in with your Microsoft account to continue.</p>
+  <a href="/auth/login" class="btn-primary" style="display:inline-block;text-decoration:none;padding:10px 20px;border-radius:8px">Sign in with Microsoft</a>
+</div>
+
 <header>
   <div class="brand">
     <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="1.8">
@@ -129,7 +135,7 @@
   </nav>
 </header>
 
-<main>
+<main id="appMain" style="display:none">
 
   <!-- TAB 1: Email to Calendar -->
   <div id="emailTab" class="tab active">
@@ -203,7 +209,6 @@
       <h2>Meeting Prep</h2>
       <p class="subtitle">AI brief for your next upcoming meeting, with context from recent emails with attendees.</p>
       <div class="row">
-        <input type="email" id="prepEmail" value="glenlin7813@gmail.com" />
         <button class="btn-primary" id="prepBtn" onclick="getMeetingPrep()">Prepare</button>
       </div>
       <div id="prepStatus" class="status hidden"></div>
@@ -220,7 +225,6 @@
       <h2>Task List</h2>
       <p class="subtitle">AI-extracted tasks from your emails, sorted by urgency. Due dates inferred automatically.</p>
       <div class="row">
-        <input type="email" id="tasksEmail" value="glenlin7813@gmail.com" />
         <button class="btn-primary" id="tasksBtn" onclick="getTasks()">Load Tasks</button>
       </div>
       <div id="tasksStatus" class="status hidden"></div>
@@ -241,7 +245,6 @@
       <h2>Contact Memory</h2>
       <p class="subtitle">AI-maintained summaries of people you communicate with, updated after each email.</p>
       <div class="row">
-        <input type="email" id="contactsEmail" value="glenlin7813@gmail.com" />
         <button class="btn-primary" id="contactsBtn" onclick="getContacts()">Load Contacts</button>
       </div>
       <div id="contactsStatus" class="status hidden"></div>
@@ -315,7 +318,6 @@
     <div class="card">
       <h2>Stored Context &amp; Rules</h2>
       <div class="row" style="margin-bottom:12px">
-        <input type="email" id="rulesEmail" value="glenlin7813@gmail.com" style="flex:1" />
         <button class="btn-outline" onclick="loadRulesTab()">Refresh</button>
       </div>
       <div id="rulesStatus" class="status hidden"></div>
@@ -331,7 +333,6 @@
       <h2>Daily Schedule</h2>
       <p class="subtitle">AI builds your day from calendar events, open tasks, personal rules, and recurring reminders — with importance ratings and realistic time estimates.</p>
       <div class="row">
-        <input type="email" id="scheduleEmail" value="glenlin7813@gmail.com" />
         <button class="btn-primary" id="scheduleBtn" onclick="getDailySchedule()">Generate Schedule</button>
       </div>
       <div id="scheduleStatus" class="status hidden"></div>
@@ -390,19 +391,23 @@
   }
 
   async function checkAuth() {
-    const el = document.getElementById('authArea');
+    const main = document.getElementById('appMain');
+    const splash = document.getElementById('signinSplash');
+    const authArea = document.getElementById('authArea');
     try {
       const res = await fetch(API + '/auth/me');
       if (res.ok) {
         const data = await res.json();
-        el.innerHTML = 'Signed in as ' + esc(data.email) +
+        main.style.display = '';
+        splash.style.display = 'none';
+        authArea.innerHTML = 'Signed in as ' + esc(data.email) +
           ' &middot; <a href="/auth/logout" style="color:#93c5fd">Sign out</a>';
-      } else {
-        el.innerHTML = '<a href="/auth/login" style="color:#93c5fd;font-weight:600">Sign in with Microsoft</a>';
+        return;
       }
-    } catch (e) {
-      el.innerHTML = '<a href="/auth/login" style="color:#93c5fd;font-weight:600">Sign in with Microsoft</a>';
-    }
+    } catch (e) { /* fall through to signed-out */ }
+    main.style.display = 'none';
+    splash.style.display = 'block';
+    authArea.innerHTML = '';
   }
 
   function fmtTime(iso) {
@@ -535,7 +540,6 @@
   }
 
   async function sendDraft() {
-    const email = document.getElementById('emailInput').value.trim();
     const body = document.getElementById('draftText').value.trim();
     const to = window.prompt('Reply to (email address):');
     if (!to) return;
@@ -544,7 +548,7 @@
     try {
       const res = await fetch(API + '/tasks/send-draft', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ thread_id: currentThreadId, to, subject, body, user_email: email })
+        body: JSON.stringify({ thread_id: currentThreadId, to, subject, body })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
@@ -610,12 +614,11 @@
 
   // Feature 3
   async function getMeetingPrep() {
-    const email = document.getElementById('prepEmail').value.trim();
     setLoading('prepBtn', true, 'Prepare');
     showStatus('prepStatus', 'Fetching next meeting and email history...', 'info');
     document.getElementById('prepResult').style.display = 'none';
     try {
-      const res = await fetch(API + '/meeting-prep?email=' + encodeURIComponent(email));
+      const res = await fetch(API + '/meeting-prep');
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
       if (data.message) { showStatus('prepStatus', data.message, 'info'); return; }
@@ -636,12 +639,11 @@
 
   // Feature 4: Tasks
   async function getTasks() {
-    const email = document.getElementById('tasksEmail').value.trim();
     setLoading('tasksBtn', true, 'Load Tasks');
     showStatus('tasksStatus', 'Loading tasks...', 'info');
     document.getElementById('tasksResult').style.display = 'none';
     try {
-      const res = await fetch(API + '/tasks-list?email=' + encodeURIComponent(email));
+      const res = await fetch(API + '/tasks-list');
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
       document.getElementById('statTotal').textContent = data.stats.total;
@@ -688,12 +690,11 @@
 
   // Feature 5: Contacts
   async function getContacts() {
-    const email = document.getElementById('contactsEmail').value.trim();
     setLoading('contactsBtn', true, 'Load Contacts');
     showStatus('contactsStatus', 'Loading contacts...', 'info');
     document.getElementById('contactsResult').style.display = 'none';
     try {
-      const res = await fetch(API + '/tasks-list/contacts?email=' + encodeURIComponent(email));
+      const res = await fetch(API + '/tasks-list/contacts');
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
       const list = document.getElementById('contactsList');
@@ -724,7 +725,6 @@
   const CAT_LABELS = { schedule: 'Schedule', important_date: 'Important Date', preference: 'Preference', recurring_rule: 'Rule' };
 
   async function addContext() {
-    const email = document.getElementById('rulesEmail').value.trim();
     const text = document.getElementById('ctxText').value.trim();
     const category = document.getElementById('ctxCategory').value;
     if (!text) { showStatus('ctxStatus', 'Enter some text first.', 'error'); return; }
@@ -732,7 +732,7 @@
     try {
       const res = await fetch(API + '/context', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, text, category })
+        body: JSON.stringify({ text, category })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
@@ -747,7 +747,6 @@
   }
 
   async function addRule() {
-    const email = document.getElementById('rulesEmail').value.trim();
     const desc = document.getElementById('ruleDesc').value.trim();
     const task = document.getElementById('ruleTask').value.trim();
     const hour = document.getElementById('ruleHour').value;
@@ -758,7 +757,7 @@
     try {
       const res = await fetch(API + '/context/rules', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, description: desc, task_title: task, cron_hour: hour, cron_minute: minute, cron_day_of_week: dow })
+        body: JSON.stringify({ description: desc, task_title: task, cron_hour: hour, cron_minute: minute, cron_day_of_week: dow })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
@@ -774,8 +773,7 @@
   }
 
   async function deleteContext(itemId) {
-    const email = document.getElementById('rulesEmail').value.trim();
-    await fetch(API + '/context/' + itemId + '?email=' + encodeURIComponent(email), { method: 'DELETE' });
+    await fetch(API + '/context/' + itemId, { method: 'DELETE' });
     loadRulesTab();
   }
 
@@ -793,13 +791,12 @@
   };
 
   async function getDailySchedule() {
-    const email = document.getElementById('scheduleEmail').value.trim();
     setLoading('scheduleBtn', true, 'Generate Schedule');
     showStatus('scheduleStatus', 'Building your day — fetching calendar, tasks, and rules...', 'info');
     document.getElementById('scheduleResult').style.display = 'none';
     document.getElementById('scheduleStats').style.display = 'none';
     try {
-      const res = await fetch(API + '/daily-schedule?email=' + encodeURIComponent(email));
+      const res = await fetch(API + '/daily-schedule');
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
 
@@ -867,11 +864,10 @@
   }
 
   async function createTaskFromBlock(title, rationale, durationMinutes) {
-    const email = document.getElementById('scheduleEmail').value.trim();
     try {
       const res = await fetch(API + '/daily-schedule/create-task', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, title, description: rationale, priority: 'medium', duration_minutes: durationMinutes })
+        body: JSON.stringify({ title, description: rationale, priority: 'medium', duration_minutes: durationMinutes })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
@@ -882,9 +878,8 @@
   }
 
   async function loadEmailSections() {
-    const email = document.getElementById('rulesEmail').value.trim();
     try {
-      const res = await fetch(API + '/settings/email-sections?email=' + encodeURIComponent(email));
+      const res = await fetch(API + '/settings/email-sections');
       const data = await res.json();
       if (!res.ok) return;
       const set = new Set(data.tracked_categories || []);
@@ -895,14 +890,13 @@
   }
 
   async function saveEmailSections() {
-    const email = document.getElementById('rulesEmail').value.trim();
     const cats = Array.from(document.querySelectorAll('#emailSectionsBoxes input[type=checkbox]'))
       .filter(cb => cb.checked).map(cb => cb.value);
     setLoading('saveSectionsBtn', true, 'Save Sections');
     try {
       const res = await fetch(API + '/settings/email-sections', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, tracked_categories: cats })
+        body: JSON.stringify({ tracked_categories: cats })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
@@ -916,11 +910,10 @@
 
   async function loadRulesTab() {
     loadEmailSections();
-    const email = document.getElementById('rulesEmail').value.trim();
     try {
       const [ctxRes, rulesRes] = await Promise.all([
-        fetch(API + '/context?email=' + encodeURIComponent(email)),
-        fetch(API + '/context/rules?email=' + encodeURIComponent(email))
+        fetch(API + '/context'),
+        fetch(API + '/context/rules')
       ]);
       const ctxData = await ctxRes.json();
       const rulesData = await rulesRes.json();
