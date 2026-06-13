@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from src.database import get_db
 from src.models.user import User
 from src.services.outlook_mail_service import OutlookMailService
 from src.services.outlook_calendar_service import OutlookCalendarService
+from src.api.deps import current_user
 from src.config import settings
 import re, asyncio, json
 
@@ -18,22 +18,17 @@ def _extract_emails(text: str):
 
 @router.get("")
 async def get_meeting_prep(
-    email: str = "glenlin7813@gmail.com",
+    user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Prep brief for the next upcoming calendar event: attendee context from Gmail."""
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     events = await OutlookCalendarService.get_upcoming_events(user, days_ahead=7)
     if not events:
         return {"message": "No upcoming events found in the next 7 days."}
 
     next_event = events[0]
 
-    attendee_emails = [a for a in next_event.get("attendees", []) if a and a != email]
+    attendee_emails = [a for a in next_event.get("attendees", []) if a and a != user.email]
 
     # Fetch recent emails from each attendee (up to 3 attendees, 3 emails each)
     email_context = {}
