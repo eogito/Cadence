@@ -11,6 +11,7 @@ from src.models.task import Task
 from src.models.recurring_rule import RecurringRule
 from src.services.outlook_calendar_service import OutlookCalendarService
 from src.services.user_context_service import list_all_context
+from src.api.deps import current_user
 from src.config import settings
 from datetime import datetime, timezone
 import json, asyncio
@@ -38,7 +39,6 @@ class DailyScheduleOutput(BaseModel):
 # ── Create task from schedule block ───────────────────────────────────────────
 
 class CreateTaskFromBlockRequest(BaseModel):
-    email: str = "glenlin7813@gmail.com"
     title: str
     description: str = ""
     priority: str = "medium"
@@ -46,12 +46,8 @@ class CreateTaskFromBlockRequest(BaseModel):
 
 
 @router.post("/create-task")
-async def create_task_from_block(request: CreateTaskFromBlockRequest, db: AsyncSession = Depends(get_db)):
+async def create_task_from_block(request: CreateTaskFromBlockRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Create a task in the task list from a daily schedule block."""
-    result = await db.execute(select(User).where(User.email == request.email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
 
     # Map duration to urgency score: longer/more important = higher urgency
     urgency = min(10, max(1, request.duration_minutes // 30 + 3))
@@ -75,14 +71,10 @@ async def create_task_from_block(request: CreateTaskFromBlockRequest, db: AsyncS
 
 @router.get("")
 async def get_daily_schedule(
-    email: str = "glenlin7813@gmail.com",
+    user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db)
 ):
     """Generate an AI daily schedule using calendar events, tasks, personal context and recurring rules."""
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
 
     # Fetch data concurrently
     now = datetime.now(timezone.utc)
