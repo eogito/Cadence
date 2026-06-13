@@ -8,6 +8,7 @@ from src.models.user import User
 from src.models.user_context import UserContext
 from src.models.recurring_rule import RecurringRule
 from src.services.user_context_service import add_context, list_all_context, delete_context
+from src.api.deps import current_user
 import uuid
 
 router = APIRouter(prefix="/context", tags=["Personal Context"])
@@ -18,21 +19,15 @@ VALID_CATEGORIES = ["schedule", "important_date", "recurring_rule", "preference"
 # ── Personal Context (Vector DB) ──────────────────────────────────────────────
 
 class AddContextRequest(BaseModel):
-    email: str = "glenlin7813@gmail.com"
     text: str               # e.g. "CS101 every Monday and Wednesday 9-11am"
     category: str           # schedule | important_date | recurring_rule | preference
 
 
 @router.post("")
-async def add_user_context(request: AddContextRequest, db: AsyncSession = Depends(get_db)):
+async def add_user_context(request: AddContextRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Save a personal rule, schedule, or preference to PostgreSQL + ChromaDB."""
     if request.category not in VALID_CATEGORIES:
         raise HTTPException(status_code=400, detail=f"category must be one of: {VALID_CATEGORIES}")
-
-    result = await db.execute(select(User).where(User.email == request.email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
 
     item_id = str(uuid.uuid4())
 
@@ -52,13 +47,8 @@ async def add_user_context(request: AddContextRequest, db: AsyncSession = Depend
 
 
 @router.get("")
-async def get_user_context(email: str = "glenlin7813@gmail.com", db: AsyncSession = Depends(get_db)):
+async def get_user_context(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """List all personal context items stored for the user."""
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     items = list_all_context(str(user.id))
     # Group by category for easier display
     grouped = {cat: [] for cat in VALID_CATEGORIES}
@@ -70,13 +60,8 @@ async def get_user_context(email: str = "glenlin7813@gmail.com", db: AsyncSessio
 
 
 @router.delete("/{item_id}")
-async def remove_context(item_id: str, email: str = "glenlin7813@gmail.com", db: AsyncSession = Depends(get_db)):
+async def remove_context(item_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Delete a context item from PostgreSQL and ChromaDB."""
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     # Delete from PostgreSQL
     db_result = await db.execute(
         select(UserContext).where(UserContext.item_id == item_id, UserContext.user_id == user.id)
@@ -94,7 +79,6 @@ async def remove_context(item_id: str, email: str = "glenlin7813@gmail.com", db:
 # ── Recurring Rules (Scheduler) ───────────────────────────────────────────────
 
 class AddRuleRequest(BaseModel):
-    email: str = "glenlin7813@gmail.com"
     description: str        # e.g. "Send 5 cold emails every day at 4PM"
     task_title: str         # e.g. "Send 5 cold emails"
     task_priority: str = "medium"
@@ -104,13 +88,8 @@ class AddRuleRequest(BaseModel):
 
 
 @router.post("/rules")
-async def add_recurring_rule(request: AddRuleRequest, db: AsyncSession = Depends(get_db)):
+async def add_recurring_rule(request: AddRuleRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Add a recurring rule that auto-creates a task on a schedule."""
-    result = await db.execute(select(User).where(User.email == request.email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     rule = RecurringRule(
         user_id=user.id,
         description=request.description,
@@ -135,13 +114,8 @@ async def add_recurring_rule(request: AddRuleRequest, db: AsyncSession = Depends
 
 
 @router.get("/rules")
-async def get_recurring_rules(email: str = "glenlin7813@gmail.com", db: AsyncSession = Depends(get_db)):
+async def get_recurring_rules(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """List all recurring rules for the user."""
-    result = await db.execute(select(User).where(User.email == email))
-    user = result.scalars().first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
-
     result = await db.execute(
         select(RecurringRule).where(RecurringRule.user_id == user.id, RecurringRule.active == True)
     )
@@ -163,9 +137,11 @@ async def get_recurring_rules(email: str = "glenlin7813@gmail.com", db: AsyncSes
 
 
 @router.delete("/rules/{rule_id}")
-async def delete_rule(rule_id: str, db: AsyncSession = Depends(get_db)):
-    """Deactivate a recurring rule."""
-    result = await db.execute(select(RecurringRule).where(RecurringRule.id == uuid.UUID(rule_id)))
+async def delete_rule(rule_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    """Deactivate one of the signed-in user's recurring rules."""
+    result = await db.execute(
+        select(RecurringRule).where(RecurringRule.id == uuid.UUID(rule_id), RecurringRule.user_id == user.id)
+    )
     rule = result.scalars().first()
     if not rule:
         raise HTTPException(status_code=404, detail="Rule not found.")
