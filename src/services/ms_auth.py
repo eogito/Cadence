@@ -4,6 +4,7 @@ from sqlalchemy import update
 from src.config import settings
 from src.database import AsyncSessionLocal
 from src.models.user import User
+from src.services.crypto import encrypt_token, decrypt_token
 
 # Delegated Graph scopes (MSAL adds reserved openid/profile/offline_access).
 SCOPES = ["User.Read", "Mail.Read", "Mail.Send", "Calendars.ReadWrite"]
@@ -28,7 +29,10 @@ class MicrosoftAuthService:
         """
         cache = msal.SerializableTokenCache()
         if user.ms_token_cache:
-            cache.deserialize(user.ms_token_cache)
+            raw = decrypt_token(user.ms_token_cache)
+            if raw is None:
+                raise PermissionError("Microsoft session expired — sign in again.")
+            cache.deserialize(raw)
         app = build_msal_app(cache)
 
         accounts = app.get_accounts()
@@ -39,11 +43,11 @@ class MicrosoftAuthService:
             raise PermissionError("Microsoft session expired — sign in again.")
 
         if cache.has_state_changed:
-            new_cache = cache.serialize()
-            user.ms_token_cache = new_cache
+            encrypted = encrypt_token(cache.serialize())
+            user.ms_token_cache = encrypted
             async with AsyncSessionLocal() as db:
                 await db.execute(
-                    update(User).where(User.id == user.id).values(ms_token_cache=new_cache)
+                    update(User).where(User.id == user.id).values(ms_token_cache=encrypted)
                 )
                 await db.commit()
 

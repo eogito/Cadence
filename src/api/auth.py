@@ -9,6 +9,7 @@ from src.models.user import User
 from src.api.deps import current_user
 from src.config import settings
 from src.services.ms_auth import SCOPES, build_msal_app
+from src.services.crypto import encrypt_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -52,7 +53,7 @@ async def callback(request: Request, db: AsyncSession = Depends(get_db)):
     if user is None:
         user = User(email=email)
         db.add(user)
-    user.ms_token_cache = cache.serialize()
+    user.ms_token_cache = encrypt_token(cache.serialize())
     user.ms_account_id = account_id
     await db.commit()
     await db.refresh(user)
