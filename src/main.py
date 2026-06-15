@@ -48,7 +48,7 @@ app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret.get_secret_value(),
     same_site="lax",
-    https_only=False,  # set True behind HTTPS in deployment (sub-project #3)
+    https_only=(settings.environment == "production"),
 )
 
 app.include_router(auth_router)
