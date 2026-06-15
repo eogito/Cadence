@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: cadence
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free          # bump to "starter" for an always-on launch
+    numInstances: 1
+    healthCheckPath: /health
+    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT --workers 1
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: MS_AUTHORITY
+        value: https://login.microsoftonline.com/common
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cadence-db
+          property: connectionString
+      - key: MS_CLIENT_ID
+        sync: false
+      - key: MS_CLIENT_SECRET
+        sync: false
+      - key: MS_REDIRECT_URI
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+
+databases:
+  - name: cadence-db
+    plan: free          # free Postgres expires ~90 days; bump for a real launch
