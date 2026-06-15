@@ -30,12 +30,14 @@ async def lifespan(app: FastAPI):
     # Auto-create tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    # Start scheduler and load saved recurring rules
-    scheduler.start()
-    await load_all_rules()
+    # Start scheduler and load saved recurring rules (single-process only)
+    if settings.run_scheduler:
+        scheduler.start()
+        await load_all_rules()
     await rebuild_chroma_from_db()
     yield
-    scheduler.shutdown(wait=False)
+    if settings.run_scheduler:
+        scheduler.shutdown(wait=False)
     await engine.dispose()
 
 app = FastAPI(
