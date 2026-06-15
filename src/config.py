@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     ms_authority: str = "https://login.microsoftonline.com/common"
     ms_redirect_uri: str = "http://localhost:8000/auth/callback"
     session_secret: SecretStr = SecretStr("dev-insecure-session-secret-change-me")
+    token_encryption_key: SecretStr = SecretStr("WAApm14ZalIw7D8_oYAH5nw1NW0cOqUCBv4qXyV8I5M=")  # dev-only; override in prod
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
