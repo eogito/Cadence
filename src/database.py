@@ -3,10 +3,19 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.orm import declarative_base
 from src.config import settings
 
+
+def _normalize_async_url(url: str) -> str:
+    """Render/managed Postgres gives 'postgresql://'; SQLAlchemy+asyncpg needs the
+    '+asyncpg' driver. Rewrite the scheme so either form works."""
+    if url.startswith("postgresql://"):
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
 engine = create_async_engine(
-    settings.database_url,
+    _normalize_async_url(settings.database_url),
     echo=(settings.environment == "development"),
-    future=True
+    future=True,
 )
 
 AsyncSessionLocal = async_sessionmaker(
