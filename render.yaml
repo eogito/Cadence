@@ -6,7 +6,7 @@ services:
     plan: free          # bump to "starter" for an always-on launch
     numInstances: 1
     healthCheckPath: /health
-    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT --workers 1
+    # Docker runtime: the start command comes from the Dockerfile CMD (uvicorn, binds $PORT).
     envVars:
       - key: ENVIRONMENT
         value: production
