@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     app_name: str = "AI Task Scheduler"
     environment: str = "development"
     database_url: str
-    secret_key: SecretStr
+    secret_key: SecretStr = SecretStr("")  # legacy/unused; optional so prod needn't set SECRET_KEY
     openai_api_key: SecretStr = SecretStr("")
     groq_api_key: SecretStr = SecretStr("")
     ms_client_id: str = ""
