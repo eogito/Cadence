@@ -5,12 +5,12 @@ Cadence reads your inbox, decides which emails actually need action, and turns t
 It runs as a multi-user web app: each person signs in with their own Microsoft (Outlook) account and only ever sees their own data.
 
 > **Two branches, two email providers** — see [Branches](#-branches) below.
-> - **`main`** → Microsoft 365 / **Outlook** (Microsoft Graph). The current, deploy-ready, multi-tenant app.
+> - **`main`** → Microsoft 365 / **Outlook** (Microsoft Graph). The current, deploy-ready, multi-tenant app at https://cadence-tf1v.onrender.com/.
 > - **`google-version`** → the original **Gmail + Google Calendar** prototype (single user).
 
 ---
 
-## 🌿 Branches
+## Branches
 
 | Branch | Email + Calendar | Auth | Status |
 |--------|------------------|------|--------|
@@ -62,7 +62,7 @@ flowchart TD
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```mermaid
 flowchart LR
@@ -107,7 +107,7 @@ flowchart LR
 
 ---
 
-## 🧩 Tech stack
+## Tech stack
 
 - **Backend:** Python 3.12, FastAPI / Starlette, Uvicorn
 - **AI / agent:** LangGraph (human-in-the-loop), LangChain, Groq (`llama-3.1-8b-instant`)
@@ -160,7 +160,7 @@ On `google-version`, `services/` instead contains `google_auth.py`, `gmail_servi
 
 ---
 
-## 🚀 Running locally
+## Running locally
 
 **Prerequisites:** Python 3.12, a PostgreSQL database, a [Groq API key](https://console.groq.com), and — for `main` — a Microsoft **Entra app registration** (for `google-version`, a Google Cloud OAuth client).
 
