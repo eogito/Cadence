@@ -1,4 +1,4 @@
-# Cadence — your AI executive assistant for email → calendar
+# Cadence
 
 Cadence reads your inbox, decides which emails actually need action, and turns them into calendar events and tasks — **always with your approval**. It also writes draft replies, builds your daily schedule, prepares you for your next meeting, and remembers context about the people and rules in your life.
 
@@ -23,7 +23,7 @@ Why Microsoft for the public version? Google's Gmail API requires an expensive a
 
 ---
 
-## ✨ Features
+## Features
 
 The web UI is a single page with seven tabs:
 
@@ -37,7 +37,7 @@ The web UI is a single page with seven tabs:
 
 ---
 
-## 🧠 How the email → calendar workflow works
+## How the email → calendar workflow works
 
 The core feature is a **human-in-the-loop LangGraph agent**. When you process an email, it runs a classify → extract → review → execute pipeline that **pauses for your approval** before touching your calendar:
 
@@ -118,7 +118,7 @@ flowchart LR
 
 ---
 
-## 📁 Project structure (`main`)
+## Project structure (`main`)
 
 ```
 .
