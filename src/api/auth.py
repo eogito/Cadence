@@ -13,6 +13,12 @@ from src.services.crypto import encrypt_token
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+# In-flight OAuth flows, keyed by the MSAL `state`. Kept server-side rather than in the
+# session cookie: the full flow dict (auth_uri, PKCE verifier, nonce, ...) is too large to
+# round-trip reliably in a signed cookie across the cross-site OAuth redirect. Single-instance
+# only — fine for the single-worker deploy; a multi-instance setup would use a shared store.
+_PENDING_FLOWS: dict = {}
+
 
 @router.get("/login")
 async def login(request: Request):
@@ -22,15 +28,18 @@ async def login(request: Request):
             SCOPES, redirect_uri=settings.ms_redirect_uri, prompt="select_account"
         )
     )
-    request.session["auth_flow"] = flow  # carries state + PKCE verifier
+    if len(_PENDING_FLOWS) > 500:  # guard against unbounded growth from abandoned logins
+        _PENDING_FLOWS.clear()
+    _PENDING_FLOWS[flow["state"]] = flow  # carries state + PKCE verifier
     return RedirectResponse(flow["auth_uri"])
 
 
 @router.get("/callback")
 async def callback(request: Request, db: AsyncSession = Depends(get_db)):
-    flow = request.session.pop("auth_flow", None)
+    state = request.query_params.get("state")
+    flow = _PENDING_FLOWS.pop(state, None) if state else None
     if not flow:
-        return JSONResponse({"detail": "No auth flow in session. Start at /auth/login."}, status_code=400)
+        return JSONResponse({"detail": "Auth flow not found or expired. Start at /auth/login."}, status_code=400)
 
     cache = msal.SerializableTokenCache()
     app = build_msal_app(cache)
