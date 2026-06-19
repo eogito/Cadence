@@ -10,6 +10,7 @@ from src.api.webhook import router as webhook_router
 from src.api.approval import router as approval_router
 from src.api.test import router as test_router
 from src.api.briefing import router as briefing_router
+from src.api.calendar import router as calendar_router
 from src.api.meeting_prep import router as meeting_prep_router
 from src.api.tasks import router as tasks_list_router
 from src.api.context import router as context_router
@@ -58,6 +59,7 @@ app.include_router(webhook_router)
 app.include_router(approval_router)
 app.include_router(test_router)
 app.include_router(briefing_router)
+app.include_router(calendar_router)
 app.include_router(meeting_prep_router)
 app.include_router(tasks_list_router)
 app.include_router(context_router)
