@@ -256,6 +256,15 @@
     #signinSplash .note::before { content: ""; position: absolute; top: -13px; left: 50%;
                                   transform: translateX(-50%) rotate(-3deg); width: 96px; height: 26px;
                                   background: rgba(45,45,45,.12); border: 1px dashed rgba(45,45,45,.35); }
+    .cal-cell { aspect-ratio: 1; border: 2px solid var(--pencil); border-radius: var(--wobbly-md);
+                background: var(--white); padding: 6px; cursor: pointer; font-size: .9rem;
+                transition: transform .1s ease, box-shadow .1s ease; }
+    .cal-cell:hover { transform: rotate(-1deg) translate(-1px,-1px); box-shadow: var(--shadow-hard); }
+    .cal-cell.empty { border: none; background: transparent; cursor: default; }
+    .cal-cell.today { background: var(--postit); box-shadow: var(--shadow-hard); }
+    .cal-cell.selected { border-color: var(--accent); }
+    .cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin: 1px; }
+    .cal-dot.ev { background: var(--blue); } .cal-dot.tk { background: var(--accent); }
   </style>
 </head>
 <body>
@@ -276,21 +285,43 @@
     AI Personal Secretary
   </div>
   <nav>
-    <button class="active" onclick="showTab('emailTab', this)">Email to Calendar</button>
-    <button onclick="showTab('briefingTab', this)">Morning Briefing</button>
-    <button onclick="showTab('prepTab', this)">Meeting Prep</button>
-    <button onclick="showTab('tasksTab', this)">Tasks</button>
-    <button onclick="showTab('contactsTab', this)">Contacts</button>
-    <button onclick="showTab('rulesTab', this)">My Rules</button>
-    <button onclick="showTab('scheduleTab', this)">Daily Schedule</button>
+    <button onclick="showTab('calendarTab', this)" class="active">Calendar</button>
+    <span style="position:relative">
+      <button type="button" onclick="document.getElementById('moreMenu').classList.toggle('hidden')">More &#9662;</button>
+      <span id="moreMenu" class="hidden" style="position:absolute;top:110%;right:0;background:var(--white);border:2px solid var(--pencil);border-radius:var(--wobbly-md);box-shadow:var(--shadow-hard);padding:6px;display:flex;flex-direction:column;gap:4px;z-index:20;min-width:150px">
+        <button onclick="showTab('prepTab', this);document.getElementById('moreMenu').classList.add('hidden')">Meeting Prep</button>
+        <button onclick="showTab('tasksTab', this);document.getElementById('moreMenu').classList.add('hidden')">Tasks</button>
+        <button onclick="showTab('contactsTab', this);document.getElementById('moreMenu').classList.add('hidden')">Contacts</button>
+        <button onclick="showTab('rulesTab', this);document.getElementById('moreMenu').classList.add('hidden')">My Rules</button>
+      </span>
+    </span>
     <span id="authArea" style="margin-left:16px;font-size:.8rem;display:flex;align-items:center"></span>
   </nav>
 </header>
 
 <main id="appMain" style="display:none">
 
+  <!-- TAB 0: Calendar (home) -->
+  <div id="calendarTab" class="tab active">
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h2 id="calLabel" style="margin:0">Calendar</h2>
+        <div class="row" style="flex:0 0 auto;gap:8px">
+          <button class="btn-sm" style="flex:0 0 auto" onclick="calShift(-1)">&larr;</button>
+          <button class="btn-sm" style="flex:0 0 auto" onclick="calToday()">Today</button>
+          <button class="btn-sm" style="flex:0 0 auto" onclick="calShift(1)">&rarr;</button>
+        </div>
+      </div>
+      <div id="calWeekdays" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px;font-size:.85rem;color:rgba(45,45,45,.6);margin-bottom:6px">
+        <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
+      </div>
+      <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px"></div>
+    </div>
+    <div id="dayDetail" class="card" style="display:none"></div>
+  </div>
+
   <!-- TAB 1: Email to Calendar -->
-  <div id="emailTab" class="tab active">
+  <div id="emailTab" class="tab">
     <div class="card">
       <h2>Step 1 — Process Latest Email</h2>
       <p class="subtitle">Fetch your latest email, extract tasks and propose calendar events.</p>
@@ -552,6 +583,7 @@
         const data = await res.json();
         main.style.display = '';
         splash.style.display = 'none';
+        calInit();
         authArea.innerHTML = 'Signed in as ' + esc(data.email) +
           ' &middot; <a href="/auth/logout" style="color:var(--blue);font-weight:700">Sign out</a>';
         return;
@@ -1115,6 +1147,71 @@
   loadEmailSections();
 
   // Reflect Microsoft sign-in state in the header
+  let calYear, calMonth, calSelected = null;
+  function calInit() { const n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth() + 1; renderMonth(); }
+  function calShift(d) { calMonth += d; if (calMonth < 1) { calMonth = 12; calYear--; } if (calMonth > 12) { calMonth = 1; calYear++; } renderMonth(); }
+  function calToday() { const n = new Date(); calYear = n.getFullYear(); calMonth = n.getMonth() + 1; renderMonth(); selectDay(isoDate(n)); }
+  function isoDate(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+
+  async function renderMonth() {
+    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('calLabel').textContent = MONTHS[calMonth - 1] + ' ' + calYear;
+    let data = { days: {} };
+    try { const res = await fetch(API + '/calendar/month?year=' + calYear + '&month=' + calMonth); if (res.ok) data = await res.json(); } catch (e) {}
+    const first = new Date(calYear, calMonth - 1, 1);
+    const lead = (first.getDay() + 6) % 7;
+    const daysIn = new Date(calYear, calMonth, 0).getDate();
+    const todayIso = isoDate(new Date());
+    let html = '';
+    for (let i = 0; i < lead; i++) html += '<div class="cal-cell empty"></div>';
+    for (let d = 1; d <= daysIn; d++) {
+      const iso = calYear + '-' + String(calMonth).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+      const info = data.days[iso] || { events: 0, tasks_due: 0 };
+      let dots = '';
+      for (let k = 0; k < Math.min(info.events, 3); k++) dots += '<span class="cal-dot ev"></span>';
+      for (let k = 0; k < Math.min(info.tasks_due, 3); k++) dots += '<span class="cal-dot tk"></span>';
+      const cls = 'cal-cell' + (iso === todayIso ? ' today' : '') + (iso === calSelected ? ' selected' : '');
+      html += '<div class="' + cls + '" onclick="selectDay(\'' + iso + '\')"><div style="font-weight:600">' + d + '</div><div style="margin-top:4px">' + dots + '</div></div>';
+    }
+    document.getElementById('calGrid').innerHTML = html;
+  }
+
+  const CAL_CATS = {
+    urgent_reply: 'Respond ASAP', action_required: 'Action required', fyi: 'FYI',
+    news_newsletter: 'News & newsletters', spam_promo: 'Spam & promos', other: 'Other'
+  };
+  async function selectDay(iso) {
+    calSelected = iso; renderMonth();
+    const panel = document.getElementById('dayDetail');
+    panel.style.display = 'block';
+    panel.innerHTML = '<p class="subtitle">Loading ' + esc(iso) + '…</p>';
+    try {
+      const res = await fetch(API + '/calendar/day?date=' + encodeURIComponent(iso));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed');
+      let html = '<h2>' + esc(iso) + (data.is_today ? ' · Today' : '') + '</h2>';
+      html += '<div class="section-header">Schedule</div>';
+      html += (data.events && data.events.length)
+        ? data.events.map(e => '<div class="event-card"><strong>' + esc(e.summary) + '</strong><span>' + esc(fmtTime(e.start)) + ' – ' + esc(fmtTime(e.end)) + '</span></div>').join('')
+        : '<p style="color:rgba(45,45,45,.5)">No events.</p>';
+      html += '<div class="section-header">Email breakdown</div>';
+      const grouped = (data.email_breakdown && data.email_breakdown.categorized_emails) || {};
+      let any = false;
+      for (const key of Object.keys(CAL_CATS)) {
+        const items = grouped[key] || [];
+        if (!items.length) continue;
+        any = true;
+        html += '<div class="cat-section"><div class="cat-header"><span class="cat-badge cat-other">' + esc(CAL_CATS[key]) + '</span><span style="font-size:.8rem;color:rgba(45,45,45,.5)">' + items.length + '</span></div>';
+        html += items.map(e => '<div class="email-row"><span class="sender">' + esc(e.sender) + '</span><span class="subject">' + esc(e.subject) + '</span><span class="reason">' + esc(e.reason || '') + '</span></div>').join('');
+        html += '</div>';
+      }
+      if (!any) html += '<p style="color:rgba(45,45,45,.5)">No emails on this day.</p>';
+      panel.innerHTML = html;
+    } catch (e) {
+      panel.innerHTML = '<div class="status error">Error: ' + esc(e.message) + '</div>';
+    }
+  }
+
   checkAuth();
 </script>
 </body>
