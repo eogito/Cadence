@@ -29,14 +29,13 @@ class OutlookCalendarService:
         }
 
     @staticmethod
-    async def get_upcoming_events(user: User, days_ahead: int = 7) -> List[Dict[str, Any]]:
-        now = datetime.now(timezone.utc)
+    async def get_events_in_range(user: User, start_iso: str, end_iso: str):
         params = {
-            "startDateTime": now.isoformat(),
-            "endDateTime": (now + timedelta(days=days_ahead)).isoformat(),
+            "startDateTime": start_iso,
+            "endDateTime": end_iso,
             "$orderby": "start/dateTime",
             "$select": "subject,start,end,attendees",
-            "$top": "50",
+            "$top": "200",
         }
         data = await OutlookCalendarService._graph_request(
             user, "GET", "/me/calendarView", params=params,
@@ -56,6 +55,13 @@ class OutlookCalendarService:
                 "attendees": [a for a in attendees if a],
             })
         return events
+
+    @staticmethod
+    async def get_upcoming_events(user: User, days_ahead: int = 7):
+        now = datetime.now(timezone.utc)
+        return await OutlookCalendarService.get_events_in_range(
+            user, now.isoformat(), (now + timedelta(days=days_ahead)).isoformat()
+        )
 
     @staticmethod
     async def create_event(user: User, summary: str, start_time: str, end_time: str) -> dict:
