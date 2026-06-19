@@ -4,6 +4,7 @@ from src.models.user import User
 from src.models.email_preferences import VALID_CATEGORIES
 from src.services.ms_auth import MicrosoftAuthService
 from src.services.text_utils import html_to_text
+from src.services.calendar_dates import parse_graph_dt
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
@@ -63,6 +64,39 @@ class OutlookMailService:
     @staticmethod
     def _sender(message: dict) -> str:
         return (message.get("from", {}) or {}).get("emailAddress", {}).get("address", "Unknown")
+
+    @staticmethod
+    def _in_received_range(messages, start_iso: str, end_iso: str):
+        start, end = parse_graph_dt(start_iso), parse_graph_dt(end_iso)
+        out = []
+        for m in messages:
+            r = parse_graph_dt(m.get("receivedDateTime", ""))
+            if r is not None and start <= r < end:
+                out.append(m)
+        return out
+
+    @staticmethod
+    async def get_messages_in_range(user: User, start_iso: str, end_iso: str,
+                                    unread_only: bool = False, max_fetch: int = 80):
+        """Messages received within [start, end). Filtered client-side to avoid Graph's
+        $filter + $orderby restriction."""
+        params = {
+            "$top": str(max_fetch),
+            "$orderby": "receivedDateTime desc",
+            "$select": "subject,from,bodyPreview,receivedDateTime,isRead",
+        }
+        data = await OutlookMailService._graph_get(user, "/me/messages", params)
+        msgs = data.get("value", [])
+        if unread_only:
+            msgs = [m for m in msgs if not m.get("isRead", True)]
+        msgs = OutlookMailService._in_received_range(msgs, start_iso, end_iso)
+        return [{
+            "message_id": m.get("id"),
+            "subject": m.get("subject", "No Subject"),
+            "sender": OutlookMailService._sender(m),
+            "snippet": m.get("bodyPreview", ""),
+            "date": m.get("receivedDateTime", ""),
+        } for m in msgs]
 
     @staticmethod
     async def get_latest_message_id(user: User, classification=None) -> Optional[str]:

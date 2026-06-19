@@ -30,5 +30,23 @@ class DateHelperTests(unittest.TestCase):
         self.assertIsNone(parse_graph_dt("not-a-date"))
 
 
+from src.services.outlook_mail_service import OutlookMailService
+
+
+class ReceivedRangeTests(unittest.TestCase):
+    def _msgs(self):
+        return [
+            {"id": "a", "receivedDateTime": "2026-06-13T09:00:00Z"},
+            {"id": "b", "receivedDateTime": "2026-06-12T23:59:00Z"},
+            {"id": "c", "receivedDateTime": "2026-06-14T00:00:00Z"},
+        ]
+
+    def test_filters_to_the_day(self):
+        kept = OutlookMailService._in_received_range(
+            self._msgs(), "2026-06-13T00:00:00+00:00", "2026-06-14T00:00:00+00:00"
+        )
+        self.assertEqual([m["id"] for m in kept], ["a"])
+
+
 if __name__ == "__main__":
     unittest.main()
