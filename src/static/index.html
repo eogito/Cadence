@@ -1198,6 +1198,15 @@
         html += '<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><strong style="font-family:var(--font-head);font-size:1.2rem">Today\'s emails</strong>'
           + '<button class="btn-sm" style="flex:0 0 auto" onclick="triageToday()">Process today\'s emails</button></div>'
           + '<div id="triageBoard"></div></div>';
+        html += '<div class="card" style="margin-bottom:14px"><strong style="font-family:var(--font-head);font-size:1.2rem">Plan my day</strong>'
+          + '<p class="subtitle" style="margin:6px 0 10px">How do you want today to go?</p>'
+          + '<input type="text" id="planIntent" placeholder="e.g. deep-work morning, errands after 3pm, keep it light" style="width:100%;margin-bottom:8px">'
+          + '<div class="row" style="gap:6px;margin-bottom:10px">'
+          + '<button class="btn-sm" style="flex:0 0 auto" onclick="setIntent(\'A focused, deep-work day with minimal meetings\')">Focused</button>'
+          + '<button class="btn-sm" style="flex:0 0 auto" onclick="setIntent(\'A light day, protect free time and energy\')">Light</button>'
+          + '<button class="btn-sm" style="flex:0 0 auto" onclick="setIntent(\'A catch-up day to clear the backlog of tasks\')">Catch-up</button>'
+          + '</div><button onclick="planDay()">Generate today\'s schedule</button>'
+          + '<div id="planBoard"></div></div>';
       }
       html += '<div class="section-header">Schedule</div>';
       html += (data.events && data.events.length)
@@ -1270,6 +1279,61 @@
       renderMonth();
     } catch (e) {
       showStatus('triageStatus', 'Error: ' + esc(e.message), 'error');
+    }
+  }
+
+  function setIntent(t) { const el = document.getElementById('planIntent'); if (el) el.value = t; }
+
+  function planTimeToIso(timeStr, durationMin) {
+    const m = (timeStr || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (!m) return null;
+    let h = parseInt(m[1], 10); const min = parseInt(m[2], 10); const ap = (m[3] || '').toUpperCase();
+    if (ap === 'PM' && h < 12) h += 12; if (ap === 'AM' && h === 12) h = 0;
+    const d = new Date(); d.setHours(h, min, 0, 0);
+    const end = new Date(d.getTime() + (durationMin || 30) * 60000);
+    const iso = x => x.getFullYear() + '-' + String(x.getMonth()+1).padStart(2,'0') + '-' + String(x.getDate()).padStart(2,'0') + 'T' + String(x.getHours()).padStart(2,'0') + ':' + String(x.getMinutes()).padStart(2,'0') + ':00';
+    return { start: iso(d), end: iso(end) };
+  }
+
+  async function planDay() {
+    const board = document.getElementById('planBoard');
+    const intent = (document.getElementById('planIntent') || {}).value || '';
+    board.innerHTML = '<p class="subtitle"><span class="spinner"></span>Planning your day…</p>';
+    try {
+      const res = await fetch(API + '/daily-schedule?intent=' + encodeURIComponent(intent));
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      window._planBlocks = data.blocks || [];
+      let html = '<div class="section-header">' + esc(data.date_label || 'Today') + '</div>';
+      html += '<p class="subtitle">' + esc(data.summary || '') + '</p>';
+      html += (data.blocks || []).map(b => '<div class="plan-item"><strong>' + esc(b.time) + ' · ' + esc(b.title) + '</strong>'
+        + '<span style="font-size:.82rem;color:rgba(45,45,45,.55)">' + esc(b.rationale || '') + '</span></div>').join('');
+      html += '<div class="row" style="margin-top:12px"><button onclick="pushPlan()">Add timed blocks to Outlook</button></div>';
+      html += '<div id="planStatus" class="status hidden"></div>';
+      board.innerHTML = html;
+    } catch (e) {
+      board.innerHTML = '<div class="status error">Error: ' + esc(e.message) + '</div>';
+    }
+  }
+
+  async function pushPlan() {
+    const blocks = (window._planBlocks || []).map(b => {
+      const t = planTimeToIso(b.time, b.duration_minutes);
+      return t ? { summary: b.title, start_time: t.start, end_time: t.end } : null;
+    }).filter(Boolean);
+    if (!blocks.length) { showStatus('planStatus', 'No timed blocks to push (only items with a clock time can be added).', 'error'); return; }
+    showStatus('planStatus', 'Adding to Outlook…', 'info');
+    try {
+      const res = await fetch(API + '/calendar/schedule/push', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blocks })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      showStatus('planStatus', 'Added ' + data.created + ' block(s) to your Outlook calendar.', 'success');
+      renderMonth();
+    } catch (e) {
+      showStatus('planStatus', 'Error: ' + esc(e.message), 'error');
     }
   }
 

@@ -118,3 +118,26 @@ async def approve_today_emails(request: ApproveTodayRequest, user: User = Depend
         await app.ainvoke(Command(resume={"action": "approved", "feedback": ""}), config)
         approved += 1
     return {"approved": approved}
+
+
+class ScheduleBlockPush(BaseModel):
+    summary: str
+    start_time: str  # ISO 8601
+    end_time: str    # ISO 8601
+
+
+class PushScheduleRequest(BaseModel):
+    blocks: List[ScheduleBlockPush]
+
+
+@router.post("/schedule/push")
+async def push_schedule(request: PushScheduleRequest, user: User = Depends(current_user)):
+    """Create Outlook calendar events from chosen schedule blocks."""
+    created = []
+    for b in request.blocks:
+        try:
+            res = await OutlookCalendarService.create_event(user, b.summary, b.start_time, b.end_time)
+            created.append({"summary": b.summary, "link": res.get("link")})
+        except Exception as e:
+            print(f"[push] failed '{b.summary}': {e}")
+    return {"created": len(created), "events": created}

@@ -71,6 +71,7 @@ async def create_task_from_block(request: CreateTaskFromBlockRequest, user: User
 
 @router.get("")
 async def get_daily_schedule(
+    intent: str = "",
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -185,8 +186,9 @@ async def get_daily_schedule(
         "OPEN TASKS (sorted by urgency):\n" + tasks_text + "\n\n"
         "RECURRING REMINDERS ACTIVE TODAY:\n" + rules_text + "\n\n"
         "PERSONAL CONTEXT (schedules, preferences, important dates):\n" + context_text + "\n\n"
-        "Generate a complete daily schedule with specific time blocks, importance ratings, "
-        "and realistic duration estimates for each item."
+        + ("USER'S INTENT FOR TODAY: " + intent + "\n\n" if intent.strip() else "")
+        + "Generate a complete daily schedule with specific time blocks, importance ratings, "
+        "and realistic duration estimates for each item. Respect the user's stated intent for the day."
     )
 
     llm = ChatGroq(
