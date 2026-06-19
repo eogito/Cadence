@@ -265,6 +265,10 @@
     .cal-cell.selected { border-color: var(--accent); }
     .cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin: 1px; }
     .cal-dot.ev { background: var(--blue); } .cal-dot.tk { background: var(--accent); }
+    #moreMenu { position: absolute; top: 110%; right: 0; background: var(--white); border: 2px solid var(--pencil);
+                border-radius: var(--wobbly-md); box-shadow: var(--shadow-hard); padding: 6px; display: flex;
+                flex-direction: column; gap: 4px; z-index: 20; min-width: 150px; }
+    #moreMenu.hidden { display: none; }
   </style>
 </head>
 <body>
@@ -288,7 +292,7 @@
     <button onclick="showTab('calendarTab', this)" class="active">Calendar</button>
     <span style="position:relative">
       <button type="button" onclick="document.getElementById('moreMenu').classList.toggle('hidden')">More &#9662;</button>
-      <span id="moreMenu" class="hidden" style="position:absolute;top:110%;right:0;background:var(--white);border:2px solid var(--pencil);border-radius:var(--wobbly-md);box-shadow:var(--shadow-hard);padding:6px;display:flex;flex-direction:column;gap:4px;z-index:20;min-width:150px">
+      <span id="moreMenu" class="hidden">
         <button onclick="showTab('prepTab', this);document.getElementById('moreMenu').classList.add('hidden')">Meeting Prep</button>
         <button onclick="showTab('tasksTab', this);document.getElementById('moreMenu').classList.add('hidden')">Tasks</button>
         <button onclick="showTab('contactsTab', this);document.getElementById('moreMenu').classList.add('hidden')">Contacts</button>
