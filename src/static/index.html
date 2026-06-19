@@ -1194,6 +1194,11 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || 'Failed');
       let html = '<h2>' + esc(iso) + (data.is_today ? ' · Today' : '') + '</h2>';
+      if (data.is_today) {
+        html += '<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><strong style="font-family:var(--font-head);font-size:1.2rem">Today\'s emails</strong>'
+          + '<button class="btn-sm" style="flex:0 0 auto" onclick="triageToday()">Process today\'s emails</button></div>'
+          + '<div id="triageBoard"></div></div>';
+      }
       html += '<div class="section-header">Schedule</div>';
       html += (data.events && data.events.length)
         ? data.events.map(e => '<div class="event-card"><strong>' + esc(e.summary) + '</strong><span>' + esc(fmtTime(e.start)) + ' – ' + esc(fmtTime(e.end)) + '</span></div>').join('')
@@ -1213,6 +1218,58 @@
       panel.innerHTML = html;
     } catch (e) {
       panel.innerHTML = '<div class="status error">Error: ' + esc(e.message) + '</div>';
+    }
+  }
+
+  async function triageToday() {
+    const board = document.getElementById('triageBoard');
+    if (!board) return;
+    board.innerHTML = '<p class="subtitle"><span class="spinner"></span>Reading today\'s inbox — this can take a moment…</p>';
+    try {
+      const res = await fetch(API + '/calendar/today/emails/triage', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      window._triageProposals = data.proposals || [];
+      let html = '<p class="subtitle">Scanned ' + data.scanned + ' · ' + (data.proposals || []).length
+        + ' actionable · ' + data.notifications + ' notifications · ' + data.promotions + ' promotions</p>';
+      if (!(data.proposals || []).length) {
+        board.innerHTML = html + '<p style="color:rgba(45,45,45,.5)">Nothing actionable to schedule.</p>';
+        return;
+      }
+      html += data.proposals.map((p, i) => {
+        const tasks = (p.tasks || []).map(t => '<div class="plan-item"><strong>' + esc(t.title) + '</strong>' + esc(t.description || '') + '</div>').join('');
+        const events = (p.events || []).map(e => '<div class="plan-item"><strong>' + esc(e.summary) + '</strong>' + esc(fmtTime(e.start_time)) + ' – ' + esc(fmtTime(e.end_time)) + '</div>').join('');
+        return '<div class="plan-item" style="background:var(--paper)"><label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">'
+          + '<input type="checkbox" class="triage-pick" data-i="' + i + '" checked style="flex:0 0 auto;margin-top:4px">'
+          + '<span style="flex:1"><strong>' + esc(p.subject) + '</strong><span style="font-size:.85rem;color:rgba(45,45,45,.6)">' + esc(p.sender) + '</span>'
+          + '<div class="section-header">Tasks</div>' + (tasks || '<span style="color:rgba(45,45,45,.5)">none</span>')
+          + '<div class="section-header">Events</div>' + (events || '<span style="color:rgba(45,45,45,.5)">none</span>')
+          + '</span></label></div>';
+      }).join('');
+      html += '<div class="row" style="margin-top:12px"><button onclick="approveToday()">Approve &amp; schedule selected</button></div>';
+      html += '<div id="triageStatus" class="status hidden"></div>';
+      board.innerHTML = html;
+    } catch (e) {
+      board.innerHTML = '<div class="status error">Error: ' + esc(e.message) + '</div>';
+    }
+  }
+
+  async function approveToday() {
+    const picks = Array.from(document.querySelectorAll('.triage-pick')).filter(c => c.checked);
+    const ids = picks.map(c => (window._triageProposals[+c.dataset.i] || {}).thread_id).filter(Boolean);
+    if (!ids.length) { showStatus('triageStatus', 'Select at least one email.', 'error'); return; }
+    showStatus('triageStatus', 'Scheduling…', 'info');
+    try {
+      const res = await fetch(API + '/calendar/today/emails/approve', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_ids: ids })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+      showStatus('triageStatus', 'Scheduled ' + data.approved + ' email(s) to your calendar.', 'success');
+      renderMonth();
+    } catch (e) {
+      showStatus('triageStatus', 'Error: ' + esc(e.message), 'error');
     }
   }
 
