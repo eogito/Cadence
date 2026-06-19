@@ -19,3 +19,11 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
+
+# langchain_groq's client reads GROQ_API_KEY from the environment as a fallback.
+# pydantic-settings loads .env into `settings` but does NOT export to os.environ,
+# so make the key available to every ChatGroq construction.
+import os as _os
+_groq_key = settings.groq_api_key.get_secret_value()
+if _groq_key:
+    _os.environ["GROQ_API_KEY"] = _groq_key
