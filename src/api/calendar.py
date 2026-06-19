@@ -66,6 +66,26 @@ async def calendar_day(date: str,
     return {"date": date, "is_today": is_today, "events": events, "email_breakdown": breakdown}
 
 
+# Per-(user, message) cache of triage workflow threads, so re-running triage
+# reuses the existing thread/proposal instead of spawning a duplicate and
+# re-spending LLM calls. In-memory, matching the MemorySaver checkpointer's lifetime.
+_TRIAGE_THREADS: dict = {}
+TRIAGE_LLM_CAP = 15  # max emails run through the workflow per request
+
+
+async def _triage_thread(app, user_email: str, message_id: str) -> str:
+    """Return a workflow thread_id for this email, reusing a cached one when its state still exists."""
+    cached = _TRIAGE_THREADS.get((user_email, message_id))
+    if cached:
+        snapshot = await app.aget_state({"configurable": {"thread_id": cached}})
+        if snapshot and snapshot.values:
+            return cached
+    thread_id = await process_new_email(user_email, message_id)
+    if thread_id:
+        _TRIAGE_THREADS[(user_email, message_id)] = thread_id
+    return thread_id
+
+
 @router.post("/today/emails/triage")
 async def triage_today_emails(user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     """Run every unread email received today through the workflow; aggregate the actionable proposals."""
@@ -74,15 +94,16 @@ async def triage_today_emails(user: User = Depends(current_user), db: AsyncSessi
     msgs = await OutlookMailService.get_messages_in_range(user, start_iso, end_iso, unread_only=True, max_fetch=60)
 
     app = build_agent_graph(memory_checkpointer)
-    proposals, notifications, promotions = [], 0, 0
-    for m in msgs[:15]:  # cap LLM work per run
+    proposals, notifications, promotions, processed = [], 0, 0, 0
+    for m in msgs[:TRIAGE_LLM_CAP]:  # cap LLM work per run
         try:
-            thread_id = await process_new_email(user.email, m["message_id"])
+            thread_id = await _triage_thread(app, user.email, m["message_id"])
         except Exception as e:
             print(f"[triage] skipped {m.get('message_id')}: {e}")
             continue
         if not thread_id:
             continue
+        processed += 1
         snapshot = await app.aget_state({"configurable": {"thread_id": thread_id}})
         values = snapshot.values if snapshot else {}
         category = (values.get("classification") or {}).get("category", "promotion")
@@ -101,8 +122,8 @@ async def triage_today_emails(user: User = Depends(current_user), db: AsyncSessi
         else:
             promotions += 1
 
-    return {"scanned": len(msgs), "proposals": proposals,
-            "notifications": notifications, "promotions": promotions}
+    return {"scanned": processed, "processed": processed, "total_unread": len(msgs),
+            "proposals": proposals, "notifications": notifications, "promotions": promotions}
 
 
 @router.post("/today/emails/approve")
@@ -133,11 +154,13 @@ class PushScheduleRequest(BaseModel):
 @router.post("/schedule/push")
 async def push_schedule(request: PushScheduleRequest, user: User = Depends(current_user)):
     """Create Outlook calendar events from chosen schedule blocks."""
-    created = []
+    created, errors = [], []
     for b in request.blocks:
         try:
             res = await OutlookCalendarService.create_event(user, b.summary, b.start_time, b.end_time)
             created.append({"summary": b.summary, "link": res.get("link")})
         except Exception as e:
             print(f"[push] failed '{b.summary}': {e}")
-    return {"created": len(created), "events": created}
+            errors.append({"summary": b.summary, "error": str(e)})
+    return {"requested": len(request.blocks), "created": len(created),
+            "failed": len(errors), "events": created, "errors": errors}
