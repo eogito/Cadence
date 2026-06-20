@@ -1,0 +1,14 @@
+# Normalize line endings: store and check out text files as LF.
+# Keeps Windows working copies consistent with the Linux deploy target
+# and silences "LF will be replaced by CRLF" warnings.
+* text=auto eol=lf
+
+# Treat common binary assets as binary (never convert).
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
+*.woff  binary
+*.woff2 binary
