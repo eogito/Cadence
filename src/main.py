@@ -16,6 +16,7 @@ from src.api.tasks import router as tasks_list_router
 from src.api.context import router as context_router
 from src.api.daily_schedule import router as daily_schedule_router
 from src.api.settings import router as settings_router
+from src.api.schedule import router as schedule_router
 from src.services.scheduler_service import scheduler, load_all_rules
 from src.services.user_context_service import rebuild_chroma_from_db
 # Import models so SQLAlchemy registers them before create_all
@@ -66,6 +67,7 @@ app.include_router(tasks_list_router)
 app.include_router(context_router)
 app.include_router(daily_schedule_router)
 app.include_router(settings_router)
+app.include_router(schedule_router)
 
 # Serve the frontend
 static_dir = os.path.join(os.path.dirname(__file__), "static")
