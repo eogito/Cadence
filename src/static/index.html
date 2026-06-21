@@ -639,10 +639,12 @@
         main.style.display = '';
         splash.style.display = 'none';
         calInit();
-        if (!localStorage.getItem('cadence_welcome_seen')) {
-          showHelp();
-          localStorage.setItem('cadence_welcome_seen', '1');
-        }
+        try {
+          if (!localStorage.getItem('cadence_welcome_seen')) {
+            showHelp();
+            localStorage.setItem('cadence_welcome_seen', '1');
+          }
+        } catch (e) { /* localStorage blocked (e.g. private mode) — skip the welcome */ }
         authArea.innerHTML = 'Signed in as ' + esc(data.email) +
           ' &middot; <a href="/auth/logout" style="color:var(--blue);font-weight:700">Sign out</a>';
         return;
