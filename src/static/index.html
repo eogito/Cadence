@@ -269,6 +269,19 @@
                 border-radius: var(--wobbly-md); box-shadow: var(--shadow-hard); padding: 6px; display: flex;
                 flex-direction: column; gap: 4px; z-index: 20; min-width: 150px; }
     #moreMenu.hidden { display: none; }
+    #helpOverlay { position: fixed; inset: 0; background: rgba(45,45,45,.45); z-index: 1000;
+      display: none; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 40px 16px; }
+    #helpOverlay.open { display: flex; }
+    #helpCard { background: var(--paper); border: 2px solid var(--pencil); border-radius: var(--wobbly-md);
+      box-shadow: var(--shadow-hard); max-width: 640px; width: 100%; padding: 28px 26px 32px; position: relative; }
+    #helpCard h2 { font-family: var(--font-head); margin: 0 0 2px; font-size: 1.7rem; }
+    #helpCard .help-section { margin-top: 18px; }
+    #helpCard .help-section h3 { font-family: var(--font-head); font-size: 1.08rem; margin: 0 0 4px; }
+    #helpCard .help-section p { margin: 0; font-size: .92rem; line-height: 1.55; }
+    #helpCard .help-faq { margin-top: 6px; }
+    #helpCard .help-faq strong { display: block; margin-top: 12px; font-family: var(--font-head); }
+    #helpClose { position: absolute; top: 10px; right: 14px; background: none; border: none;
+      font-size: 1.8rem; line-height: 1; cursor: pointer; color: var(--pencil); }
   </style>
 </head>
 <body>
@@ -302,6 +315,43 @@
     <span id="authArea" style="margin-left:16px;font-size:.8rem;display:flex;align-items:center"></span>
   </nav>
 </header>
+<div id="helpOverlay" onclick="if(event.target===this)closeHelp()">
+  <div id="helpCard">
+    <button id="helpClose" type="button" onclick="closeHelp()" aria-label="Close">&times;</button>
+    <h2>Welcome to Cadence</h2>
+    <p class="subtitle">Your inbox, turned into a calendar — and nothing touches your calendar without your approval.</p>
+
+    <div class="help-section">
+      <h3>The calendar is home</h3>
+      <p>Each day shows dots for its events and tasks. Click any day to see that day's schedule and a breakdown of its email.</p>
+    </div>
+
+    <div class="help-section">
+      <h3>Today's two powers</h3>
+      <p><strong>Process today's emails</strong> reads today's unread mail, sorts out the noise, and shows you the actionable ones as proposed tasks and events — you pick which to schedule. <strong>Plan my day</strong> builds a schedule from your day's events, tasks, and intent, then lets you push timed blocks straight into Outlook.</p>
+    </div>
+
+    <div class="help-section">
+      <h3>The "More" menu</h3>
+      <p>Up top, <strong>More</strong> holds Meeting Prep, Tasks, Contacts, and My Rules (personal context, recurring reminders, and which inbox sections to track).</p>
+    </div>
+
+    <div class="help-section">
+      <h3>Your privacy</h3>
+      <p>You sign in with Microsoft. Cadence reads your Outlook mail and calendar to do its work; your sign-in tokens are encrypted at rest, and every change to your calendar happens only after you approve it.</p>
+    </div>
+
+    <div class="help-section help-faq">
+      <h3>FAQ</h3>
+      <strong>Why Microsoft only?</strong>
+      <p>Microsoft's bar for serving mail access publicly is much lighter than Gmail's, so the public app uses Outlook. (A Gmail version exists on a separate branch.)</p>
+      <strong>Does it auto-create events?</strong>
+      <p>No. Cadence only ever proposes — you approve before anything lands on your calendar.</p>
+      <strong>How do I choose which inbox sections to track?</strong>
+      <p>Open <strong>More → My Rules</strong> and pick Focused, Other, or both.</p>
+    </div>
+  </div>
+</div>
 
 <main id="appMain" style="display:none">
 
@@ -889,6 +939,7 @@
       if (!data.contacts.length) {
         list.innerHTML = '<p style="color:#9ca3af;font-size:.88rem">No contacts yet. Process some emails first.</p>';
       } else {
+        
         list.innerHTML = data.contacts.map(c =>
           '<div class="plan-item">' +
           '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
