@@ -44,3 +44,4 @@ credentials.json
 .pytest_cache/
 htmlcov/
 .coverage
+.superpowers/
