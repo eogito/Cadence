@@ -24,6 +24,7 @@ import src.models.task          # noqa: F401
 import src.models.recurring_rule  # noqa: F401
 import src.models.user_context    # noqa: F401
 import src.models.email_preferences  # noqa: F401
+import src.models.schedule_block  # noqa: F401
 import os
 
 @asynccontextmanager
