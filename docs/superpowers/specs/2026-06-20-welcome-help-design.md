@@ -19,7 +19,7 @@ One overlay modal serves both jobs.
 - **Decision:** first-run state lives in `localStorage`, not a `users` column. Rationale: zero backend/migration cost. Trade-off: re-shows after clearing storage or on a new device — acceptable for a welcome modal. (A per-account flag is a possible later upgrade: one column + endpoint.)
 
 ### 2. Modal structure
-- `#helpModal` overlay (fixed, dimmed backdrop) + `#helpCard` content, dismissible via a close button, backdrop click, and Esc.
+- `#helpOverlay` overlay (fixed, dimmed backdrop) + `#helpCard` content, dismissible via a close button, backdrop click, and Esc.
 - `showHelp()` / `closeHelp()` functions; the **?** button and first-run check both call `showHelp()`.
 
 ### 3. Content (Hand-Drawn styled, matching existing cards/post-its)
@@ -39,5 +39,5 @@ Reuse existing Hand-Drawn CSS variables and patterns (`--paper`, `--pencil`, `--
 - Any backend/API/DB change.
 
 ## Verification
-- Structural grep: `#helpModal`, `showHelp(`, `closeHelp(`, the **?** button, and the `localStorage` first-run check each present once.
+- Structural grep: `#helpOverlay`, `showHelp(`, `closeHelp(`, the **?** button, and the `localStorage` first-run check each present once.
 - Manual: fresh session (cleared storage) auto-opens the modal once; **?** reopens it; close persists (no re-open on reload within the same storage).
