@@ -71,7 +71,10 @@ async def get_schedule(date: str, user: User = Depends(current_user), db: AsyncS
     )
     blocks = [_block_dict(b) for b in res.scalars().all()]
     start_iso, end_iso = day_range(date)
-    events = await OutlookCalendarService.get_events_in_range(user, start_iso, end_iso)
+    try:
+        events = await OutlookCalendarService.get_events_in_range(user, start_iso, end_iso)
+    except PermissionError:
+        raise HTTPException(status_code=401, detail="Microsoft session expired — sign in again.")
     return {"day": date, "blocks": blocks, "events": events}
 
 
@@ -112,7 +115,10 @@ async def delete_block(block_id: str, user: User = Depends(current_user), db: As
 async def generate(req: GenerateRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     day = _parse_day(req.date)
     start_iso, end_iso = day_range(req.date)
-    events = await OutlookCalendarService.get_events_in_range(user, start_iso, end_iso)
+    try:
+        events = await OutlookCalendarService.get_events_in_range(user, start_iso, end_iso)
+    except PermissionError:
+        raise HTTPException(status_code=401, detail="Microsoft session expired — sign in again.")
 
     existing_res = await db.execute(
         select(ScheduleBlock).where(ScheduleBlock.user_id == user.id, ScheduleBlock.day == day)
@@ -178,7 +184,10 @@ async def push_block(block_id: str, user: User = Depends(current_user), db: Asyn
     if b.outlook_event_id:
         return {"pushed": False, "already": True}
     start_iso, end_iso = _block_to_iso(b.day, b.start_minute, b.duration_minutes)
-    res = await OutlookCalendarService.create_event(user, b.title, start_iso, end_iso)
+    try:
+        res = await OutlookCalendarService.create_event(user, b.title, start_iso, end_iso)
+    except PermissionError:
+        raise HTTPException(status_code=401, detail="Microsoft session expired — sign in again.")
     b.outlook_event_id = res.get("id") or res.get("event_id") or "pushed"
     await db.commit()
     return {"pushed": True, "link": res.get("link")}
