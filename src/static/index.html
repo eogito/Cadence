@@ -256,15 +256,23 @@
     #signinSplash .note::before { content: ""; position: absolute; top: -13px; left: 50%;
                                   transform: translateX(-50%) rotate(-3deg); width: 96px; height: 26px;
                                   background: rgba(45,45,45,.12); border: 1px dashed rgba(45,45,45,.35); }
-    .cal-cell { aspect-ratio: 1; border: 2px solid var(--pencil); border-radius: var(--wobbly-md);
-                background: var(--white); padding: 6px; cursor: pointer; font-size: .9rem;
+    .cal-cell { min-height: 62px; display: flex; flex-direction: column; gap: 3px;
+                border: 2px solid var(--pencil); border-radius: var(--wobbly-md);
+                background: var(--white); padding: 6px 7px; cursor: pointer; font-size: .9rem;
                 transition: transform .1s ease, box-shadow .1s ease; }
-    .cal-cell:hover { transform: rotate(-1deg) translate(-1px,-1px); box-shadow: var(--shadow-hard); }
-    .cal-cell.empty { border: none; background: transparent; cursor: default; }
-    .cal-cell.today { background: var(--postit); box-shadow: var(--shadow-hard); }
-    .cal-cell.selected { border-color: var(--accent); }
-    .cal-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin: 1px; }
+    .cal-cell:hover { transform: translate(-1px,-1px); box-shadow: var(--shadow-hard); }
+    .cal-cell.empty, .cal-cell.empty:hover { border: none; background: transparent;
+                cursor: default; box-shadow: none; transform: none; }
+    .cal-cell.today { background: var(--postit); }
+    .cal-cell.today .cal-num { font-weight: 800; }
+    .cal-cell.selected { box-shadow: 0 0 0 2px var(--accent); }
+    .cal-num { font-weight: 600; line-height: 1; }
+    .cal-dots { display: flex; flex-wrap: wrap; gap: 2px; margin-top: auto; }
+    .cal-dot { width: 5px; height: 5px; border-radius: 50%; }
     .cal-dot.ev { background: var(--blue); } .cal-dot.tk { background: var(--accent); }
+    .cal-legend { display: flex; gap: 16px; justify-content: center; margin-top: 12px;
+                  font-size: .72rem; color: rgba(45,45,45,.55); }
+    .cal-legend span { display: inline-flex; align-items: center; gap: 5px; }
     #moreMenu { position: absolute; top: 110%; right: 0; background: var(--white); border: 2px solid var(--pencil);
                 border-radius: var(--wobbly-md); box-shadow: var(--shadow-hard); padding: 6px; display: flex;
                 flex-direction: column; gap: 4px; z-index: 20; min-width: 150px; }
@@ -393,6 +401,7 @@
         <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
       </div>
       <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:6px"></div>
+      <div class="cal-legend"><span><span class="cal-dot ev"></span> events</span><span><span class="cal-dot tk"></span> tasks due</span></div>
     </div>
     <div id="dayDetail" class="card" style="display:none"></div>
   </div>
@@ -1276,7 +1285,7 @@
       for (let k = 0; k < Math.min(info.events, 3); k++) dots += '<span class="cal-dot ev"></span>';
       for (let k = 0; k < Math.min(info.tasks_due, 3); k++) dots += '<span class="cal-dot tk"></span>';
       const cls = 'cal-cell' + (iso === todayIso ? ' today' : '') + (iso === calSelected ? ' selected' : '');
-      html += '<div class="' + cls + '" onclick="selectDay(\'' + iso + '\')"><div style="font-weight:600">' + d + '</div><div style="margin-top:4px">' + dots + '</div></div>';
+      html += '<div class="' + cls + '" onclick="selectDay(\'' + iso + '\')"><div class="cal-num">' + d + '</div><div class="cal-dots">' + dots + '</div></div>';
     }
     document.getElementById('calGrid').innerHTML = html;
   }
@@ -1454,7 +1463,7 @@
       + (total ? '<div class="sb-prog"><span>' + done + ' of ' + total + ' done</span><div class="bar"><i style="width:' + pct + '%"></i></div></div>' : '')
       + '<div id="schedStatus" class="status hidden"></div></div>';
     html += '<div class="sb-tl"><div class="sb-axis">' + axis + '</div>'
-      + '<div class="sb-canvas" style="height:' + H + 'px" onclick="if(event.target===this)addSlotFromClick(event,' + winStart + ')">' + canvas + nowLine + '</div></div>';
+      + '<div class="sb-canvas" style="height:' + H + 'px">' + canvas + nowLine + '</div></div>';
     html += '<div class="sb-pop" id="schedPopover"></div>';
     if (!total) html += '<p class="subtitle" style="margin-top:8px">No blocks yet — Generate a day, or tap the timeline to add one.</p>';
     board.innerHTML = html;
@@ -1477,6 +1486,19 @@
     box.classList.add('open');
   }
 
+  // Keep the in-memory block list in sync so edits re-render instantly,
+  // without a GET /schedule round-trip (which re-hits Microsoft Graph).
+  function _replaceBlock(updated) {
+    const arr = window._sched.blocks || (window._sched.blocks = []);
+    const i = arr.findIndex(b => b.id === updated.id);
+    if (i >= 0) arr[i] = updated; else arr.push(updated);
+    renderSchedule();
+  }
+  function _removeBlock(id) {
+    window._sched.blocks = (window._sched.blocks || []).filter(b => b.id !== id);
+    renderSchedule();
+  }
+
   async function saveBlock(id, btn) {
     const start = sbHHMMToMin(document.getElementById('ebStart').value);
     if (start == null) { showStatus('ebStatus', 'Start must look like 9:00 AM.', 'error'); return; }
@@ -1487,7 +1509,7 @@
       await withBusy(btn, 'Saving…', async () => {
         const res = await fetch(API + '/schedule/block/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
         const data = await calJson(res); if (!res.ok) throw new Error(data.detail || 'Failed');
-        await loadSchedule(window._sched.iso);
+        _replaceBlock(data);
       });
     } catch (e) { showStatus('ebStatus', 'Error: ' + esc(e.message), 'error'); }
   }
@@ -1496,16 +1518,18 @@
     try {
       const res = await fetch(API + '/schedule/block/' + id, { method: 'DELETE' });
       const data = await calJson(res); if (!res.ok) throw new Error(data.detail || 'Failed');
-      await loadSchedule(window._sched.iso);
+      _removeBlock(id);
     } catch (e) { showStatus('schedStatus', 'Error: ' + esc(e.message), 'error'); }
   }
 
   async function toggleDone(id, done) {
+    const b = (window._sched.blocks || []).find(x => x.id === id);
+    if (b) { b.done = done; renderSchedule(); }  // optimistic: flip locally first
     try {
       const res = await fetch(API + '/schedule/block/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ done: done }) });
       const data = await calJson(res); if (!res.ok) throw new Error(data.detail || 'Failed');
-      await loadSchedule(window._sched.iso);
-    } catch (e) { showStatus('schedStatus', 'Error: ' + esc(e.message), 'error'); }
+      _replaceBlock(data);
+    } catch (e) { if (b) { b.done = !done; renderSchedule(); } showStatus('schedStatus', 'Error: ' + esc(e.message), 'error'); }
   }
 
   async function addSlot(minute) {
@@ -1514,14 +1538,9 @@
       const res = await fetch(API + '/schedule/block', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ date: window._sched.iso, start_minute: m, duration_minutes: 30, title: 'New block' }) });
       const data = await calJson(res); if (!res.ok) throw new Error(data.detail || 'Failed');
-      await loadSchedule(window._sched.iso);
+      _replaceBlock(data);
       openBlockEditor(data.id);
     } catch (e) { showStatus('schedStatus', 'Error: ' + esc(e.message), 'error'); }
-  }
-
-  function addSlotFromClick(ev, winStart) {
-    const minute = Math.round((winStart + ev.offsetY / SB_PXMIN) / 15) * 15;
-    addSlot(Math.max(0, Math.min(1440 - 30, minute)));
   }
 
   async function generateDay(mode, btn) {
@@ -1531,7 +1550,8 @@
         const res = await fetch(API + '/schedule/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ date: window._sched.iso, intent: intent, mode: mode }) });
         const data = await calJson(res); if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
-        await loadSchedule(window._sched.iso);
+        window._sched.blocks = data.blocks || [];  // generate returns the full list — no extra fetch
+        renderSchedule();
       });
     } catch (e) { showStatus('schedStatus', 'Error: ' + esc(e.message), 'error'); }
   }
@@ -1541,8 +1561,8 @@
       await withBusy(btn, 'Pushing…', async () => {
         const res = await fetch(API + '/schedule/block/' + id + '/push', { method: 'POST' });
         const data = await calJson(res); if (!res.ok) throw new Error(data.detail || 'Failed');
-        showStatus('ebStatus', data.already ? 'Already on Outlook.' : 'Added to Outlook.', 'success');
-        await loadSchedule(window._sched.iso);
+        const b = (window._sched.blocks || []).find(x => x.id === id); if (b) { b.pushed = true; renderSchedule(); }
+        showStatus('ebStatus', data.already ? 'Already on Outlook.' : 'Added to Outlook.', data.already ? 'info' : 'success');
       });
     } catch (e) { showStatus('ebStatus', 'Error: ' + esc(e.message), 'error'); }
   }
@@ -1552,9 +1572,10 @@
       await withBusy(btn, 'Pushing…', async () => {
         const res = await fetch(API + '/schedule/push?date=' + encodeURIComponent(window._sched.iso), { method: 'POST' });
         const data = await calJson(res); if (!res.ok) throw new Error(data.detail || 'Failed');
+        if (!data.failed) { (window._sched.blocks || []).forEach(b => { b.pushed = true; }); renderSchedule(); }
+        else { await loadSchedule(window._sched.iso); }  // partial failure: resync truth
         const failed = data.failed ? ' (' + data.failed + ' failed)' : '';
         showStatus('schedStatus', 'Pushed ' + data.pushed + ' block(s) to Outlook' + failed + '.', data.pushed ? 'success' : 'error');
-        await loadSchedule(window._sched.iso);
       });
     } catch (e) { showStatus('schedStatus', 'Error: ' + esc(e.message), 'error'); }
   }
