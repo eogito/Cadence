@@ -1303,8 +1303,9 @@
       const res = await fetch(API + '/calendar/day?date=' + encodeURIComponent(iso));
       const data = await calJson(res);
       if (!res.ok) throw new Error(data.detail || 'Failed');
-      let html = '<h2>' + esc(iso) + (data.is_today ? ' · Today' : '') + '</h2>';
-      if (data.is_today) {
+      const isToday = (iso === isoDate(new Date()));  // local-day check (backend is_today is UTC, can be off by a day)
+      let html = '<h2>' + esc(iso) + (isToday ? ' · Today' : '') + '</h2>';
+      if (isToday) {
         html += '<div class="card" style="margin-bottom:14px"><div style="display:flex;align-items:center;justify-content:space-between;gap:10px"><strong style="font-family:var(--font-head);font-size:1.2rem">Today\'s emails</strong>'
           + '<button class="btn-sm" style="flex:0 0 auto" onclick="triageToday(this)">Process today\'s emails</button></div>'
           + '<div id="triageBoard"></div></div>';
