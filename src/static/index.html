@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Personal Secretary</title>
+  <title>Cadence</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap" rel="stylesheet" />
@@ -296,17 +296,24 @@
     .sb-prog { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:.8rem; color:rgba(45,45,45,.6); }
     .sb-prog .bar { flex:1; height:8px; background:#eee; border-radius:5px; overflow:hidden; }
     .sb-prog .bar i { display:block; height:100%; background:#3a9c84; }
-    .sb-tl { display:flex; gap:8px; }
-    .sb-axis { width:48px; font-size:.62rem; color:rgba(45,45,45,.45); }
-    .sb-canvas { flex:1; position:relative; border:2px solid var(--pencil); border-radius:var(--wobbly-md); background:var(--white); overflow:hidden; }
-    .sb { position:absolute; left:7px; right:7px; border-radius:7px; padding:3px 8px; font-size:.78rem; font-weight:600; box-sizing:border-box; overflow:hidden; cursor:pointer; }
-    .sb small { font-weight:400; opacity:.85; font-size:.66rem; }
-    .sb.mine { background:var(--blue); color:#fff; }
-    .sb.ev { background:repeating-linear-gradient(45deg,#eef2fb,#eef2fb 6px,#e3e9f7 6px,#e3e9f7 12px); color:#2d3e63; border:1.5px dashed #9bb0d8; cursor:default; }
-    .sb.done { background:#bcd; color:#456; text-decoration:line-through; }
-    .sb.conflict { box-shadow:0 0 0 2.5px var(--accent); }
-    .sb .sb-chk { float:right; margin-left:6px; }
-    .sb-now { position:absolute; left:0; right:0; height:0; border-top:2px solid var(--accent); z-index:6; }
+    .ag-list { display:flex; flex-direction:column; gap:7px; }
+    .ag-row { display:flex; align-items:flex-start; gap:9px; border:2px solid var(--pencil); border-radius:var(--wobbly-md);
+              background:var(--white); padding:8px 11px; cursor:pointer; transition:transform .1s ease, box-shadow .1s ease; }
+    .ag-row:hover { transform:translate(-1px,-1px); box-shadow:var(--shadow-hard); }
+    .ag-row .ag-time { flex:0 0 62px; font-weight:700; font-size:.82rem; font-variant-numeric:tabular-nums; padding-top:1px; }
+    .ag-row .ag-body { flex:1; display:flex; flex-direction:column; gap:1px; min-width:0; }
+    .ag-row .ag-body strong { font-weight:700; }
+    .ag-row .ag-sub { font-size:.72rem; color:rgba(45,45,45,.55); }
+    .ag-row .ag-chk { flex:0 0 auto; margin-top:3px; }
+    .ag-row.ev { background:repeating-linear-gradient(45deg,#f3f6fc,#f3f6fc 7px,#e7edf9 7px,#e7edf9 14px);
+                 border-style:dashed; border-color:#9bb0d8; color:#2d3e63; cursor:default; }
+    .ag-row.ev:hover { transform:none; box-shadow:none; }
+    .ag-row.done strong { text-decoration:line-through; opacity:.6; }
+    .ag-row.conflict { border-color:var(--accent); box-shadow:0 0 0 1.5px var(--accent); }
+    .ag-warn { color:var(--accent); font-weight:700; }
+    .ag-now { display:flex; align-items:center; gap:8px; margin:3px 0; color:var(--accent);
+              font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+    .ag-now::before, .ag-now::after { content:''; flex:1; height:2px; background:var(--accent); border-radius:2px; }
     .sb-pop { border:2px solid var(--pencil); border-radius:var(--wobbly-md); background:var(--postit); padding:12px; margin-top:12px; box-shadow:var(--shadow-hard); display:none; }
     .sb-pop.open { display:block; }
     .sb-pop label { font-size:.7rem; color:rgba(45,45,45,.6); display:block; margin-top:6px; }
@@ -318,7 +325,7 @@
 
 <div id="signinSplash" style="display:none;text-align:center;margin-top:90px;padding:0 16px">
   <div class="note">
-    <h2>AI Personal Secretary</h2>
+    <h2>Cadence</h2>
     <p>Sign in with your Microsoft account to continue.</p>
     <a href="/auth/login" class="btn-primary">Sign in with Microsoft</a>
   </div>
@@ -329,7 +336,7 @@
     <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="1.8">
       <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
     </svg>
-    AI Personal Secretary
+    Cadence
   </div>
   <nav>
     <button onclick="showTab('calendarTab', this)" class="active">Calendar</button>
@@ -1391,8 +1398,7 @@
     }
   }
 
-  // ── Flexible daily schedule (timeline) ────────────────────────────────────
-  const SB_PXMIN = 0.8;
+  // ── Flexible daily schedule (agenda list) ─────────────────────────────────
   function sbMinToHHMM(m) { let h = Math.floor(m / 60), mi = m % 60; const ap = h >= 12 ? 'PM' : 'AM'; let h12 = h % 12; if (h12 === 0) h12 = 12; return h12 + ':' + String(mi).padStart(2, '0') + ' ' + ap; }
   function sbHHMMToMin(s) { const m = (s || '').match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i); if (!m) return null; let h = +m[1], mi = +m[2], ap = (m[3] || '').toUpperCase(); if (ap === 'PM' && h < 12) h += 12; if (ap === 'AM' && h === 12) h = 0; if (h > 23 || mi > 59) return null; return h * 60 + mi; }
   function sbIsoToMin(iso) { const d = new Date(iso); if (isNaN(d.getTime())) return null; return d.getHours() * 60 + d.getMinutes(); }
@@ -1418,13 +1424,7 @@
     const blocks = S.blocks;
     const evs = S.events.map(e => ({ summary: e.summary, s: sbIsoToMin(e.start), e: sbIsoToMin(e.end) })).filter(x => x.s != null && x.e != null);
 
-    let starts = [7 * 60], ends = [22 * 60];
-    blocks.forEach(b => { starts.push(b.start_minute); ends.push(b.start_minute + b.duration_minutes); });
-    evs.forEach(e => { starts.push(e.s); ends.push(e.e); });
-    const winStart = Math.max(0, Math.floor(Math.min.apply(null, starts) / 60) * 60);
-    const winEnd = Math.min(1440, Math.ceil(Math.max.apply(null, ends) / 60) * 60);
-    const H = Math.max(120, (winEnd - winStart) * SB_PXMIN);
-
+    // conflicts: a block overlapping another block or an Outlook event
     function ov(a1, a2, b1, b2) { return a1 < b2 && b1 < a2; }
     const conflict = {};
     blocks.forEach((b, i) => {
@@ -1436,27 +1436,38 @@
     const done = blocks.filter(b => b.done).length, total = blocks.length;
     const pct = total ? Math.round(done / total * 100) : 0;
 
-    let axis = '';
-    for (let m = winStart; m <= winEnd; m += 60) axis += '<div style="height:' + (60 * SB_PXMIN) + 'px">' + sbMinToHHMM(m).replace(':00', '') + '</div>';
+    // unified time-ordered agenda: editable blocks + read-only Outlook events
+    const items = [];
+    blocks.forEach(b => items.push({ kind: 'block', start: b.start_minute, b: b }));
+    evs.forEach(e => items.push({ kind: 'event', start: e.s, e: e }));
+    items.sort((a, x) => a.start - x.start);
 
-    let canvas = '';
-    evs.forEach(e => {
-      const top = (e.s - winStart) * SB_PXMIN, h = Math.max(18, (e.e - e.s) * SB_PXMIN);
-      canvas += '<div class="sb ev" style="top:' + top + 'px;height:' + h + 'px">' + esc(e.summary || 'Busy') + ' <small>Outlook</small></div>';
-    });
-    blocks.forEach(b => {
-      const top = (b.start_minute - winStart) * SB_PXMIN, h = Math.max(22, b.duration_minutes * SB_PXMIN);
-      const cls = 'sb mine' + (b.done ? ' done' : '') + (conflict[b.id] ? ' conflict' : '');
-      canvas += '<div class="' + cls + '" style="top:' + top + 'px;height:' + h + 'px" onclick="openBlockEditor(\'' + b.id + '\')">'
-        + '<input type="checkbox" class="sb-chk" ' + (b.done ? 'checked' : '') + ' onclick="event.stopPropagation();toggleDone(\'' + b.id + '\',this.checked)">'
-        + (b.locked ? '🔒 ' : '') + esc(b.title) + ' <small>' + sbMinToHHMM(b.start_minute) + ' · ' + b.duration_minutes + 'm' + (b.pushed ? ' · ✓Outlook' : '') + '</small></div>';
-    });
-    let nowLine = '';
     const todayIso = isoDate(new Date());
-    if (S.iso === todayIso) {
-      const now = new Date(); const nm = now.getHours() * 60 + now.getMinutes();
-      if (nm >= winStart && nm <= winEnd) nowLine = '<div class="sb-now" style="top:' + ((nm - winStart) * SB_PXMIN) + 'px"></div>';
-    }
+    let nowMin = null;
+    if (S.iso === todayIso) { const n = new Date(); nowMin = n.getHours() * 60 + n.getMinutes(); }
+    const nowDivider = '<div class="ag-now"><span>now</span></div>';
+
+    let rows = '', nowPlaced = false;
+    items.forEach(it => {
+      if (nowMin != null && !nowPlaced && it.start >= nowMin) { rows += nowDivider; nowPlaced = true; }
+      if (it.kind === 'event') {
+        const e = it.e;
+        rows += '<div class="ag-row ev"><span class="ag-time">' + esc(sbMinToHHMM(e.s)) + '</span>'
+          + '<span class="ag-body"><strong>📅 ' + esc(e.summary || 'Busy') + '</strong>'
+          + '<span class="ag-sub">' + esc(sbMinToHHMM(e.s)) + '–' + esc(sbMinToHHMM(e.e)) + ' · Outlook</span></span></div>';
+      } else {
+        const b = it.b;
+        const cls = 'ag-row mine' + (b.done ? ' done' : '') + (conflict[b.id] ? ' conflict' : '');
+        rows += '<div class="' + cls + '" onclick="openBlockEditor(\'' + b.id + '\')">'
+          + '<input type="checkbox" class="ag-chk" ' + (b.done ? 'checked' : '') + ' onclick="event.stopPropagation();toggleDone(\'' + b.id + '\',this.checked)">'
+          + '<span class="ag-time">' + esc(sbMinToHHMM(b.start_minute)) + '</span>'
+          + '<span class="ag-body"><strong>' + (b.locked ? '🔒 ' : '') + esc(b.title) + '</strong>'
+          + '<span class="ag-sub">' + b.duration_minutes + 'm'
+          + (conflict[b.id] ? ' · <span class="ag-warn">⚠ overlap</span>' : '')
+          + (b.pushed ? ' · ✓ Outlook' : '') + '</span></span></div>';
+      }
+    });
+    if (nowMin != null && !nowPlaced) rows += nowDivider;  // now is past everything today
 
     let html = '<div class="sb-ctrl"><input class="sb-intent" id="schedIntent" placeholder="How do you want this day to go? (optional)">'
       + '<div class="row">'
@@ -1467,10 +1478,8 @@
       + '</div>'
       + (total ? '<div class="sb-prog"><span>' + done + ' of ' + total + ' done</span><div class="bar"><i style="width:' + pct + '%"></i></div></div>' : '')
       + '<div id="schedStatus" class="status hidden"></div></div>';
-    html += '<div class="sb-tl"><div class="sb-axis">' + axis + '</div>'
-      + '<div class="sb-canvas" style="height:' + H + 'px">' + canvas + nowLine + '</div></div>';
+    html += '<div class="ag-list">' + (items.length ? rows : '<p class="subtitle" style="margin:4px 2px">Nothing scheduled — Generate a day, or use ＋ Add slot.</p>') + '</div>';
     html += '<div class="sb-pop" id="schedPopover"></div>';
-    if (!total) html += '<p class="subtitle" style="margin-top:8px">No blocks yet — Generate a day, or tap the timeline to add one.</p>';
     board.innerHTML = html;
   }
 
