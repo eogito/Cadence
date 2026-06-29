@@ -3,7 +3,6 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List
 from src.models.user import User
 from src.services.ms_auth import MicrosoftAuthService
-from src.services.calendar_dates import user_tz
 
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
@@ -65,9 +64,9 @@ class OutlookCalendarService:
         )
 
     @staticmethod
-    async def create_event(user: User, summary: str, start_time: str, end_time: str) -> dict:
+    async def create_event(user: User, summary: str, start_time: str, end_time: str, tz: str = "UTC") -> dict:
         data = await OutlookCalendarService._graph_request(
             user, "POST", "/me/events",
-            json_body=OutlookCalendarService._event_body(summary, start_time, end_time, user_tz(user)),
+            json_body=OutlookCalendarService._event_body(summary, start_time, end_time, tz),
         )
         return {"event_id": data.get("id"), "link": data.get("webLink")}

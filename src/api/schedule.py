@@ -1,4 +1,5 @@
-from datetime import datetime, date as date_cls, timedelta
+from datetime import datetime, date as date_cls, timedelta, timezone
+from zoneinfo import ZoneInfo
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -128,8 +129,8 @@ async def generate(req: GenerateRequest, user: User = Depends(current_user), db:
     existing = existing_res.scalars().all()
 
     def ev_minutes(e):
-        s = _iso_to_minute(e.get("start"))
-        en = _iso_to_minute(e.get("end"))
+        s = _iso_to_minute(e.get("start"), tz)
+        en = _iso_to_minute(e.get("end"), tz)
         return (s, en) if s is not None and en is not None else None
     busy = [m for m in (ev_minutes(e) for e in events) if m]
 
@@ -162,13 +163,24 @@ async def generate(req: GenerateRequest, user: User = Depends(current_user), db:
     return {"created": len(new_blocks), "blocks": [_block_dict(b) for b in res.scalars().all()]}
 
 
-def _iso_to_minute(iso: Optional[str]) -> Optional[int]:
+def _iso_to_minute(iso: Optional[str], tz: str = "UTC") -> Optional[int]:
+    """Minutes-from-local-midnight for a Graph event datetime.
+
+    When Graph honours the Prefer timezone header it returns a naive local wall-clock
+    string (use as-is). When it doesn't (e.g. all-day/recurring events come back as UTC
+    'Z'), the value is absolute, so convert it into the user's timezone first.
+    """
     if not iso:
         return None
     try:
         dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
     except ValueError:
         return None
+    if dt.tzinfo is not None:
+        try:
+            dt = dt.astimezone(ZoneInfo(tz))
+        except Exception:
+            dt = dt.astimezone(timezone.utc)
     return dt.hour * 60 + dt.minute
 
 
@@ -187,7 +199,7 @@ async def push_block(block_id: str, user: User = Depends(current_user), db: Asyn
         return {"pushed": False, "already": True}
     start_iso, end_iso = _block_to_iso(b.day, b.start_minute, b.duration_minutes)
     try:
-        res = await OutlookCalendarService.create_event(user, b.title, start_iso, end_iso)
+        res = await OutlookCalendarService.create_event(user, b.title, start_iso, end_iso, tz=user_tz(user))
     except PermissionError:
         raise HTTPException(status_code=401, detail="Microsoft session expired — sign in again.")
     b.outlook_event_id = res.get("id") or res.get("event_id") or "pushed"
@@ -209,7 +221,7 @@ async def push_all(date: str, user: User = Depends(current_user), db: AsyncSessi
     for b in blocks:
         try:
             start_iso, end_iso = _block_to_iso(b.day, b.start_minute, b.duration_minutes)
-            ev = await OutlookCalendarService.create_event(user, b.title, start_iso, end_iso)
+            ev = await OutlookCalendarService.create_event(user, b.title, start_iso, end_iso, tz=user_tz(user))
             b.outlook_event_id = ev.get("id") or ev.get("event_id") or "pushed"
             pushed += 1
         except Exception as e:  # noqa: BLE001

@@ -3,6 +3,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from contextlib import asynccontextmanager
 from starlette.middleware.sessions import SessionMiddleware
+from sqlalchemy import text
 from src.config import settings
 from src.database import engine, Base
 from src.api.auth import router as auth_router
@@ -33,6 +34,8 @@ async def lifespan(app: FastAPI):
     # Auto-create tables
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # create_all does not add columns to pre-existing tables; backfill new columns idempotently
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64) DEFAULT 'UTC'"))
     # Start scheduler and load saved recurring rules (single-process only)
     if settings.run_scheduler:
         scheduler.start()
