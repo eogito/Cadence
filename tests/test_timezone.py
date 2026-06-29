@@ -8,5 +8,29 @@ class ModelTests(unittest.TestCase):
         self.assertIn("timezone", User.__table__.columns)
 
 
+class HelperTests(unittest.TestCase):
+    def test_user_tz_defaults_to_utc(self):
+        from src.services.calendar_dates import user_tz
+        class U: timezone = None
+        self.assertEqual(user_tz(U()), "UTC")
+
+    def test_user_tz_returns_stored(self):
+        from src.services.calendar_dates import user_tz
+        class U: timezone = "Asia/Tokyo"
+        self.assertEqual(user_tz(U()), "Asia/Tokyo")
+
+    def test_local_day_range_edt(self):
+        from src.services.calendar_dates import local_day_range
+        start, end = local_day_range("2026-06-22", "America/New_York")
+        self.assertEqual(start, "2026-06-22T04:00:00+00:00")
+        self.assertEqual(end, "2026-06-23T04:00:00+00:00")
+
+    def test_local_day_range_bad_tz_falls_back_utc(self):
+        from src.services.calendar_dates import local_day_range
+        start, end = local_day_range("2026-06-22", "Not/AZone")
+        self.assertEqual(start, "2026-06-22T00:00:00+00:00")
+        self.assertEqual(end, "2026-06-23T00:00:00+00:00")
+
+
 if __name__ == "__main__":
     unittest.main()
