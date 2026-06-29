@@ -43,5 +43,12 @@ class EventBodyTests(unittest.TestCase):
         self.assertEqual(body["subject"], "Meet")
 
 
+class TimezoneEndpointTests(unittest.TestCase):
+    def test_request_has_no_email_field(self):
+        from src.api.settings import TimezoneRequest
+        self.assertNotIn("email", TimezoneRequest.model_fields)
+        self.assertNotIn("user_email", TimezoneRequest.model_fields)
+
+
 if __name__ == "__main__":
     unittest.main()

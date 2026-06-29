@@ -672,6 +672,10 @@
         splash.style.display = 'none';
         calInit();
         try {
+          const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+          if (tz) fetch(API + '/settings/timezone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ timezone: tz }) });
+        } catch (e) { /* tz detection unsupported — leave default */ }
+        try {
           if (!localStorage.getItem('cadence_welcome_seen')) {
             showHelp();
             localStorage.setItem('cadence_welcome_seen', '1');

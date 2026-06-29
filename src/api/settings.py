@@ -11,6 +11,7 @@ from src.services.email_preferences_service import (
     invalid_categories,
 )
 from src.api.deps import current_user
+from zoneinfo import ZoneInfo
 
 router = APIRouter(prefix="/settings", tags=["Settings"])
 
@@ -38,3 +39,23 @@ async def put_email_sections(
         raise HTTPException(status_code=400, detail=f"Invalid categories: {bad}. Allowed: {VALID_CATEGORIES}")
     saved = await set_tracked_categories(db, user, request.tracked_categories)
     return {"tracked_categories": saved}
+
+
+class TimezoneRequest(BaseModel):
+    timezone: str
+
+
+@router.post("/timezone")
+async def set_timezone(
+    request: TimezoneRequest,
+    user: User = Depends(current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Save the signed-in user's IANA timezone (auto-detected from the browser)."""
+    try:
+        ZoneInfo(request.timezone)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid timezone")
+    user.timezone = request.timezone
+    await db.commit()
+    return {"timezone": request.timezone}
