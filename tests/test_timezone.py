@@ -32,5 +32,16 @@ class HelperTests(unittest.TestCase):
         self.assertEqual(end, "2026-06-23T00:00:00+00:00")
 
 
+class EventBodyTests(unittest.TestCase):
+    def test_event_body_stamps_tz_and_strips_z(self):
+        from src.services.outlook_calendar_service import OutlookCalendarService
+        body = OutlookCalendarService._event_body(
+            "Meet", "2026-06-22T09:00:00Z", "2026-06-22T10:00:00", "America/New_York"
+        )
+        self.assertEqual(body["start"], {"dateTime": "2026-06-22T09:00:00", "timeZone": "America/New_York"})
+        self.assertEqual(body["end"], {"dateTime": "2026-06-22T10:00:00", "timeZone": "America/New_York"})
+        self.assertEqual(body["subject"], "Meet")
+
+
 if __name__ == "__main__":
     unittest.main()
