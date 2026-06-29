@@ -9,7 +9,7 @@ from src.database import get_db
 from src.models.user import User
 from src.models.schedule_block import ScheduleBlock
 from src.api.deps import current_user
-from src.services.calendar_dates import day_range
+from src.services.calendar_dates import local_day_range, user_tz
 from src.services.outlook_calendar_service import OutlookCalendarService
 from src.services.schedule_ai import generate_blocks, parse_time_to_minute  # noqa: F401
 
@@ -70,9 +70,10 @@ async def get_schedule(date: str, user: User = Depends(current_user), db: AsyncS
         .order_by(ScheduleBlock.start_minute.asc())
     )
     blocks = [_block_dict(b) for b in res.scalars().all()]
-    start_iso, end_iso = day_range(date)
+    tz = user_tz(user)
+    start_iso, end_iso = local_day_range(date, tz)
     try:
-        events = await OutlookCalendarService.get_events_in_range(user, start_iso, end_iso)
+        events = await OutlookCalendarService.get_events_in_range(user, start_iso, end_iso, prefer_tz=tz)
     except PermissionError:
         raise HTTPException(status_code=401, detail="Microsoft session expired — sign in again.")
     return {"day": date, "blocks": blocks, "events": events}
@@ -114,9 +115,10 @@ async def delete_block(block_id: str, user: User = Depends(current_user), db: As
 @router.post("/generate")
 async def generate(req: GenerateRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
     day = _parse_day(req.date)
-    start_iso, end_iso = day_range(req.date)
+    tz = user_tz(user)
+    start_iso, end_iso = local_day_range(req.date, tz)
     try:
-        events = await OutlookCalendarService.get_events_in_range(user, start_iso, end_iso)
+        events = await OutlookCalendarService.get_events_in_range(user, start_iso, end_iso, prefer_tz=tz)
     except PermissionError:
         raise HTTPException(status_code=401, detail="Microsoft session expired — sign in again.")
 

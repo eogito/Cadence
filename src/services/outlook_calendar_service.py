@@ -30,7 +30,7 @@ class OutlookCalendarService:
         }
 
     @staticmethod
-    async def get_events_in_range(user: User, start_iso: str, end_iso: str):
+    async def get_events_in_range(user: User, start_iso: str, end_iso: str, prefer_tz: str = "UTC"):
         params = {
             "startDateTime": start_iso,
             "endDateTime": end_iso,
@@ -40,7 +40,7 @@ class OutlookCalendarService:
         }
         data = await OutlookCalendarService._graph_request(
             user, "GET", "/me/calendarView", params=params,
-            extra_headers={"Prefer": 'outlook.timezone="UTC"'},
+            extra_headers={"Prefer": f'outlook.timezone="{prefer_tz}"'},
         )
         events = []
         for e in data.get("value", []):
