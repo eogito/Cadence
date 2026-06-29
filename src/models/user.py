@@ -12,5 +12,6 @@ class User(Base):
     google_oauth_tokens = Column(JSONB, nullable=True)
     ms_token_cache = Column(Text, nullable=True)            # serialized MSAL SerializableTokenCache
     ms_account_id = Column(String(255), nullable=True, index=True)  # MSAL account/object id
+    timezone = Column(String(64), default="UTC")            # IANA tz, auto-detected from the browser
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

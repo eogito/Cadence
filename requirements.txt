@@ -122,3 +122,4 @@ yarl==1.24.2
 zstandard==0.25.0
 msal
 itsdangerous
+tzdata
