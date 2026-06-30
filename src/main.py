@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         # create_all does not add columns to pre-existing tables; backfill new columns idempotently
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS timezone VARCHAR(64) DEFAULT 'UTC'"))
+        await conn.execute(text("ALTER TABLE schedule_blocks ADD COLUMN IF NOT EXISTS plan_group VARCHAR(120)"))
     # Start scheduler and load saved recurring rules (single-process only)
     if settings.run_scheduler:
         scheduler.start()

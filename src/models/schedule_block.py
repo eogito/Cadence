@@ -22,4 +22,5 @@ class ScheduleBlock(Base):
     locked = Column(Boolean, default=False)
     outlook_event_id = Column(String(255), nullable=True)
     source = Column(String(10), default="manual")       # ai / manual
+    plan_group = Column(String(120), nullable=True)         # groups blocks from one prep plan
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

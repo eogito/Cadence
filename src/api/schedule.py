@@ -29,6 +29,7 @@ def _block_dict(b: ScheduleBlock) -> dict:
         "id": str(b.id), "start_minute": b.start_minute, "duration_minutes": b.duration_minutes,
         "title": b.title, "notes": b.notes, "category": b.category, "importance": b.importance,
         "done": b.done, "locked": b.locked, "pushed": bool(b.outlook_event_id), "source": b.source,
+        "plan_group": b.plan_group,
     }
 
 
