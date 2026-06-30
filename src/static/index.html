@@ -314,6 +314,9 @@
     .ag-now { display:flex; align-items:center; gap:8px; margin:3px 0; color:var(--accent);
               font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
     .ag-now::before, .ag-now::after { content:''; flex:1; height:2px; background:var(--accent); border-radius:2px; }
+    .ag-prep { flex:0 0 auto; align-self:center; font-size:.68rem; padding:3px 7px; }
+    .prep-day { margin-top:8px; }
+    .prep-day strong { font-family:var(--font-head); font-size:.9rem; }
     .sb-pop { border:2px solid var(--pencil); border-radius:var(--wobbly-md); background:var(--postit); padding:12px; margin-top:12px; box-shadow:var(--shadow-hard); display:none; }
     .sb-pop.open { display:block; }
     .sb-pop label { font-size:.7rem; color:rgba(45,45,45,.6); display:block; margin-top:6px; }
@@ -1454,7 +1457,8 @@
         const e = it.e;
         rows += '<div class="ag-row ev"><span class="ag-time">' + esc(sbMinToHHMM(e.s)) + '</span>'
           + '<span class="ag-body"><strong>📅 ' + esc(e.summary || 'Busy') + '</strong>'
-          + '<span class="ag-sub">' + esc(sbMinToHHMM(e.s)) + '–' + esc(sbMinToHHMM(e.e)) + ' · Outlook</span></span></div>';
+          + '<span class="ag-sub">' + esc(sbMinToHHMM(e.s)) + '–' + esc(sbMinToHHMM(e.e)) + ' · Outlook</span></span>'
+          + '<button class="btn-sm ag-prep" data-title="' + esc(e.summary || 'Event') + '" data-date="' + S.iso + '" onclick="event.stopPropagation();openPrepFromBtn(this)">📚 Plan prep</button></div>';
       } else {
         const b = it.b;
         const cls = 'ag-row mine' + (b.done ? ' done' : '') + (conflict[b.id] ? ' conflict' : '');
@@ -1480,6 +1484,7 @@
       + '<div id="schedStatus" class="status hidden"></div></div>';
     html += '<div class="ag-list">' + (items.length ? rows : '<p class="subtitle" style="margin:4px 2px">Nothing scheduled — Generate a day, or use ＋ Add slot.</p>') + '</div>';
     html += '<div class="sb-pop" id="schedPopover"></div>';
+    html += '<div class="sb-pop" id="prepDialog"></div>';
     board.innerHTML = html;
   }
 
@@ -1592,6 +1597,61 @@
         showStatus('schedStatus', 'Pushed ' + data.pushed + ' block(s) to Outlook' + failed + '.', data.pushed ? 'success' : 'error');
       });
     } catch (e) { showStatus('schedStatus', 'Error: ' + esc(e.message), 'error'); }
+  }
+
+  function openPrepFromBtn(btn) { openPrepDialog(btn.dataset.title, btn.dataset.date); }
+
+  function openPrepDialog(title, examDate) {
+    window._prepTarget = { title: title, examDate: examDate };
+    const box = document.getElementById('prepDialog');
+    box.innerHTML = '<strong style="font-family:var(--font-head)">Plan prep for "' + esc(title) + '"</strong>'
+      + '<p class="subtitle" style="margin:4px 0 8px">On ' + esc(examDate) + ' — study time spreads across the days before it.</p>'
+      + '<div class="r"><div style="flex:1"><label>Total hours</label><input id="prepHours" type="number" value="6" min="0.5" step="0.5"></div>'
+      + '<div style="flex:1"><label>Max hrs/day</label><input id="prepCap" type="number" value="2" min="0.5" step="0.5"></div></div>'
+      + '<div class="r" style="margin-top:9px"><button class="btn-sm" onclick="prepPreview(this)">Preview plan</button>'
+      + '<button class="btn-sm" onclick="closePrep()">Cancel</button></div>'
+      + '<div id="prepBoard"></div><div id="prepStatus" class="status hidden"></div>';
+    box.classList.add('open');
+  }
+
+  function closePrep() { const b = document.getElementById('prepDialog'); if (b) b.classList.remove('open'); }
+
+  async function prepPreview(btn) {
+    const t = window._prepTarget; if (!t) return;
+    const totalMin = Math.round((parseFloat(document.getElementById('prepHours').value) || 0) * 60);
+    const capMin = Math.round((parseFloat(document.getElementById('prepCap').value) || 0) * 60);
+    const board = document.getElementById('prepBoard');
+    try {
+      await withBusy(btn, 'Planning…', async () => {
+        const res = await fetch(API + '/schedule/prep-plan/preview', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event_title: t.title, exam_date: t.examDate, total_minutes: totalMin, daily_cap_minutes: capMin }) });
+        const data = await calJson(res); if (!res.ok) throw new Error(data.detail || JSON.stringify(data));
+        window._prepProposal = data;
+        if (!data.days.length) { board.innerHTML = '<p class="subtitle" style="margin-top:8px">No free time to schedule prep before this date.</p>'; return; }
+        let html = data.days.map(d => '<div class="prep-day"><strong>' + esc(d.date) + '</strong>'
+          + d.sessions.map(s => '<div class="ag-sub">• ' + esc(sbMinToHHMM(s.start_minute)) + ' · ' + s.duration_minutes + 'm</div>').join('') + '</div>').join('');
+        const hrs = Math.round(data.placed_minutes / 60 * 10) / 10;
+        const sh = data.shortfall_minutes ? ' (couldn\'t fit ' + (Math.round(data.shortfall_minutes / 60 * 10) / 10) + 'h)' : '';
+        html += '<button class="btn-sm" style="margin-top:10px" onclick="prepCommit(this)">Add ' + hrs + 'h to my schedule' + sh + '</button>';
+        board.innerHTML = html;
+      });
+    } catch (e) { showStatus('prepStatus', 'Error: ' + esc(e.message), 'error'); }
+  }
+
+  async function prepCommit(btn) {
+    const p = window._prepProposal; if (!p) return;
+    const blocks = [];
+    p.days.forEach(d => d.sessions.forEach(s => blocks.push({ date: d.date, start_minute: s.start_minute, duration_minutes: s.duration_minutes, title: s.title })));
+    try {
+      await withBusy(btn, 'Adding…', async () => {
+        const res = await fetch(API + '/schedule/prep-plan/commit', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ plan_label: p.plan_label, blocks: blocks }) });
+        const data = await calJson(res); if (!res.ok) throw new Error(data.detail || 'Failed');
+        closePrep();
+        showStatus('schedStatus', 'Added ' + data.created + ' study block(s).', 'success');
+        await loadSchedule(window._sched.iso);
+      });
+    } catch (e) { showStatus('prepStatus', 'Error: ' + esc(e.message), 'error'); }
   }
 
   checkAuth();
