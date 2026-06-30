@@ -272,6 +272,8 @@ async def prep_preview(req: PrepPreviewRequest, user: User = Depends(current_use
     if not days:
         return {"plan_label": req.event_title, "requested_minutes": req.total_minutes,
                 "placed_minutes": 0, "days": [], "shortfall_minutes": req.total_minutes}
+    if len(days) > 60:
+        raise HTTPException(status_code=400, detail="exam_date is too far out — prep planning is capped at ~60 days.")
 
     alloc = allocate_per_day(len(days), req.total_minutes, req.daily_cap_minutes, ramp=True)
     out_days, placed = [], 0
@@ -310,9 +312,10 @@ async def prep_commit(req: PrepCommitRequest, user: User = Depends(current_user)
     created = 0
     for blk in req.blocks:
         db.add(ScheduleBlock(
-            user_id=user.id, day=_parse_day(blk.date), start_minute=blk.start_minute,
-            duration_minutes=max(5, blk.duration_minutes), title=blk.title,
-            category="suggested", source="ai", plan_group=req.plan_label,
+            user_id=user.id, day=_parse_day(blk.date),
+            start_minute=max(0, min(blk.start_minute, 1439)),       # clamp to a valid day minute
+            duration_minutes=max(15, min(blk.duration_minutes, 480)),  # 15 min .. 8 h
+            title=blk.title, category="suggested", source="ai", plan_group=req.plan_label,
         ))
         created += 1
     await db.commit()
