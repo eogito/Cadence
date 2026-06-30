@@ -9,6 +9,22 @@ class ModelTests(unittest.TestCase):
         self.assertIn("schedule_blocks", Base.metadata.tables)
 
 
+class DedupeOverlapTests(unittest.TestCase):
+    def test_drops_blocks_overlapping_each_other(self):
+        from src.services.schedule_ai import dedupe_overlaps
+        blocks = [
+            {"start_minute": 540, "duration_minutes": 90, "title": "A"},   # 9:00-10:30
+            {"start_minute": 600, "duration_minutes": 30, "title": "B"},   # 10:00-10:30 overlaps A
+            {"start_minute": 630, "duration_minutes": 30, "title": "C"},   # 10:30-11:00 ok
+        ]
+        self.assertEqual([b["title"] for b in dedupe_overlaps(blocks, [])], ["A", "C"])
+
+    def test_drops_blocks_overlapping_busy(self):
+        from src.services.schedule_ai import dedupe_overlaps
+        blocks = [{"start_minute": 540, "duration_minutes": 60, "title": "X"}]  # 9:00-10:00
+        self.assertEqual(dedupe_overlaps(blocks, [(570, 600)]), [])  # busy 9:30-10:00
+
+
 class TimeHelperTests(unittest.TestCase):
     def test_parse_time_to_minute_variants(self):
         from src.services.schedule_ai import parse_time_to_minute

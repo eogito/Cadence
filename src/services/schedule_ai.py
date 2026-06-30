@@ -60,6 +60,25 @@ def free_gaps(win_start: int, win_end: int, busy: List[Tuple[int, int]]) -> List
     return [(s, e) for s, e in gaps if e > s]
 
 
+def dedupe_overlaps(blocks: List[dict], busy: List[Tuple[int, int]]) -> List[dict]:
+    """Keep blocks that don't overlap `busy` intervals or each other.
+
+    Blocks are dicts with 'start_minute'/'duration_minutes'. Processed earliest-start
+    first; a block that overlaps anything already kept (or any busy interval) is dropped.
+    Guarantees the returned set is mutually non-overlapping.
+    """
+    occupied = list(busy)
+    kept = []
+    for b in sorted(blocks, key=lambda x: x["start_minute"]):
+        s = b["start_minute"]
+        e = s + b["duration_minutes"]
+        if any(s < be and bs < e for bs, be in occupied):
+            continue
+        occupied.append((s, e))
+        kept.append(b)
+    return kept
+
+
 class _GenBlock(BaseModel):
     time: str = Field(description="Concrete clock start time like '9:00 AM' or '14:30' — NEVER 'Flexible'")
     title: str
@@ -123,6 +142,8 @@ async def generate_blocks(
     system_msg = (
         "You are an expert scheduler. Build a realistic, chronological daily schedule. "
         "Every block MUST have a concrete clock start time (e.g. '9:00 AM' or '14:30') — never 'Flexible' or 'Evening'. "
+        "Blocks MUST NOT overlap each other: each block must start at or after the previous block's end "
+        "(start + duration). Leave small gaps for transitions rather than stacking blocks on the same time. "
         "Deep work = 90-120 min, quick tasks = 15-30 min. "
         "Return ONLY valid JSON matching: " + schema_str
     )
@@ -143,20 +164,17 @@ async def generate_blocks(
     chain = prompt | structured
     out: _GenOutput = await asyncio.to_thread(chain.invoke, {"input": user_msg})
 
-    busy_intervals = busy or []
-    blocks = []
+    candidates = []
     for b in out.blocks:
         start = parse_time_to_minute(b.time)
         if start is None:
             continue
-        dur = max(5, int(b.duration_minutes or 30))
-        if any(start < be and bs < start + dur for bs, be in busy_intervals):
-            continue  # respect locked/fixed time in fill-gaps mode
-        blocks.append({
+        candidates.append({
             "start_minute": start,
-            "duration_minutes": dur,
+            "duration_minutes": max(5, int(b.duration_minutes or 30)),
             "title": b.title,
             "category": b.category if b.category in ("task", "rule_based", "suggested") else "suggested",
             "importance": int(b.importance) if b.importance else None,
         })
-    return blocks
+    # Drop anything that collides with a fixed event, a locked block, or another generated block.
+    return dedupe_overlaps(candidates, busy or [])
