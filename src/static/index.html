@@ -1501,6 +1501,7 @@
       + '<div class="r" style="margin-top:9px"><button class="btn-sm" onclick="saveBlock(\'' + id + '\',this)">Save</button>'
       + '<button class="btn-sm" style="color:var(--accent)" onclick="deleteBlock(\'' + id + '\')">Delete</button>'
       + '<button class="btn-sm" onclick="pushBlock(\'' + id + '\',this)">→ Outlook</button></div>'
+      + (b.plan_group ? '<button class="btn-sm" style="color:var(--accent);margin-top:8px" onclick="removePrepPlan(\'' + id + '\')">Remove entire study plan</button>' : '')
       + '<div id="ebStatus" class="status hidden"></div>';
     box.classList.add('open');
   }
@@ -1597,6 +1598,18 @@
         showStatus('schedStatus', 'Pushed ' + data.pushed + ' block(s) to Outlook' + failed + '.', data.pushed ? 'success' : 'error');
       });
     } catch (e) { showStatus('schedStatus', 'Error: ' + esc(e.message), 'error'); }
+  }
+
+  async function removePrepPlan(blockId) {
+    const b = (window._sched.blocks || []).find(x => x.id === blockId);
+    if (!b || !b.plan_group) return;
+    if (!confirm('Remove the whole "' + b.plan_group + '" study plan from every day?')) return;
+    try {
+      const res = await fetch(API + '/schedule/prep-plan?label=' + encodeURIComponent(b.plan_group), { method: 'DELETE' });
+      const data = await calJson(res); if (!res.ok) throw new Error(data.detail || 'Failed');
+      showStatus('schedStatus', 'Removed ' + data.deleted + ' study block(s).', 'success');
+      await loadSchedule(window._sched.iso);
+    } catch (e) { showStatus('ebStatus', 'Error: ' + esc(e.message), 'error'); }
   }
 
   function openPrepFromBtn(btn) { openPrepDialog(btn.dataset.title, btn.dataset.date); }
