@@ -13,6 +13,7 @@ from src.api.deps import current_user
 from src.services.calendar_dates import local_day_range, user_tz
 from src.services.outlook_calendar_service import OutlookCalendarService
 from src.services.schedule_ai import generate_blocks, parse_time_to_minute  # noqa: F401
+from src.services.prep_planner import allocate_per_day, place_sessions
 
 router = APIRouter(prefix="/schedule", tags=["Schedule"])
 
@@ -230,3 +231,109 @@ async def push_all(date: str, user: User = Depends(current_user), db: AsyncSessi
             failed += 1
     await db.commit()
     return {"pushed": pushed, "failed": failed}
+
+
+class PrepPreviewRequest(BaseModel):
+    event_title: str
+    exam_date: str            # YYYY-MM-DD
+    total_minutes: int
+    daily_cap_minutes: int = 120
+
+
+class PrepCommitBlock(BaseModel):
+    date: str
+    start_minute: int
+    duration_minutes: int
+    title: str
+
+
+class PrepCommitRequest(BaseModel):
+    plan_label: str
+    blocks: list[PrepCommitBlock]
+
+
+@router.post("/prep-plan/preview")
+async def prep_preview(req: PrepPreviewRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    try:
+        exam = datetime.strptime(req.exam_date, "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="exam_date must be YYYY-MM-DD")
+    if req.total_minutes <= 0 or req.daily_cap_minutes <= 0:
+        raise HTTPException(status_code=400, detail="total_minutes and daily_cap_minutes must be positive")
+
+    tz = user_tz(user)
+    today = datetime.now(timezone.utc).astimezone(ZoneInfo(tz)).date() if _safe_zone(tz) else datetime.now(timezone.utc).date()
+    days = []
+    d = today + timedelta(days=1)
+    while d < exam:
+        days.append(d)
+        d += timedelta(days=1)
+
+    if not days:
+        return {"plan_label": req.event_title, "requested_minutes": req.total_minutes,
+                "placed_minutes": 0, "days": [], "shortfall_minutes": req.total_minutes}
+
+    alloc = allocate_per_day(len(days), req.total_minutes, req.daily_cap_minutes, ramp=True)
+    out_days, placed = [], 0
+    for i, day in enumerate(days):
+        iso = day.isoformat()
+        blk_res = await db.execute(
+            select(ScheduleBlock).where(ScheduleBlock.user_id == user.id, ScheduleBlock.day == day)
+        )
+        busy = [(b.start_minute, b.start_minute + b.duration_minutes) for b in blk_res.scalars().all()]
+        try:
+            s_iso, e_iso = local_day_range(iso, tz)
+            events = await OutlookCalendarService.get_events_in_range(user, s_iso, e_iso, prefer_tz=tz)
+            for e in events:
+                es, ee = _iso_to_minute(e.get("start"), tz), _iso_to_minute(e.get("end"), tz)
+                if es is not None and ee is not None:
+                    busy.append((es, ee))
+        except PermissionError:
+            raise HTTPException(status_code=401, detail="Microsoft session expired — sign in again.")
+        except Exception as ex:  # noqa: BLE001 — one bad day shouldn't sink the whole preview
+            print(f"[prep] events fetch failed for {iso}: {ex}")
+        sessions = place_sessions(alloc[i], busy)
+        if sessions:
+            out_days.append({"date": iso, "sessions": [
+                {"start_minute": st, "duration_minutes": du, "title": f"Study: {req.event_title}"}
+                for st, du in sessions
+            ]})
+            placed += sum(du for _, du in sessions)
+
+    return {"plan_label": req.event_title, "requested_minutes": req.total_minutes,
+            "placed_minutes": placed, "days": out_days,
+            "shortfall_minutes": max(0, req.total_minutes - placed)}
+
+
+@router.post("/prep-plan/commit")
+async def prep_commit(req: PrepCommitRequest, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    created = 0
+    for blk in req.blocks:
+        db.add(ScheduleBlock(
+            user_id=user.id, day=_parse_day(blk.date), start_minute=blk.start_minute,
+            duration_minutes=max(5, blk.duration_minutes), title=blk.title,
+            category="suggested", source="ai", plan_group=req.plan_label,
+        ))
+        created += 1
+    await db.commit()
+    return {"created": created}
+
+
+@router.delete("/prep-plan")
+async def prep_delete(label: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)):
+    res = await db.execute(
+        select(ScheduleBlock).where(ScheduleBlock.user_id == user.id, ScheduleBlock.plan_group == label)
+    )
+    blocks = res.scalars().all()
+    for b in blocks:
+        await db.delete(b)
+    await db.commit()
+    return {"deleted": len(blocks)}
+
+
+def _safe_zone(tz: str) -> bool:
+    try:
+        ZoneInfo(tz)
+        return True
+    except Exception:
+        return False

@@ -43,5 +43,13 @@ class PlaceSessionsTests(unittest.TestCase):
         self.assertEqual(place_sessions(20, [], window=(480, 720), min_session=30), [])
 
 
+class RequestModelTests(unittest.TestCase):
+    def test_requests_have_no_email_field(self):
+        from src.api.schedule import PrepPreviewRequest, PrepCommitRequest
+        for model in (PrepPreviewRequest, PrepCommitRequest):
+            self.assertNotIn("email", model.model_fields)
+            self.assertNotIn("user_email", model.model_fields)
+
+
 if __name__ == "__main__":
     unittest.main()
