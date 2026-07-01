@@ -13,7 +13,8 @@ from src.api.deps import current_user
 from src.services.calendar_dates import local_day_range, user_tz
 from src.services.outlook_calendar_service import OutlookCalendarService
 from src.services.schedule_ai import generate_blocks, parse_time_to_minute  # noqa: F401
-from src.services.prep_planner import allocate_per_day, place_sessions
+from src.services.prep_planner import day_capacity, distribute, place_sessions
+from src.services.schedule_ai import free_gaps
 
 router = APIRouter(prefix="/schedule", tags=["Schedule"])
 
@@ -275,9 +276,10 @@ async def prep_preview(req: PrepPreviewRequest, user: User = Depends(current_use
     if len(days) > 60:
         raise HTTPException(status_code=400, detail="exam_date is too far out — prep planning is capped at ~60 days.")
 
-    alloc = allocate_per_day(len(days), req.total_minutes, req.daily_cap_minutes, ramp=True)
-    out_days, placed = [], 0
-    for i, day in enumerate(days):
+    WINDOW = (8 * 60, 22 * 60)
+    day_busy = []
+    caps = []
+    for day in days:
         iso = day.isoformat()
         blk_res = await db.execute(
             select(ScheduleBlock).where(ScheduleBlock.user_id == user.id, ScheduleBlock.day == day)
@@ -294,7 +296,13 @@ async def prep_preview(req: PrepPreviewRequest, user: User = Depends(current_use
             raise HTTPException(status_code=401, detail="Microsoft session expired — sign in again.")
         except Exception as ex:  # noqa: BLE001 — one bad day shouldn't sink the whole preview
             print(f"[prep] events fetch failed for {iso}: {ex}")
-        sessions = place_sessions(alloc[i], busy)
+        day_busy.append((iso, busy))
+        caps.append(day_capacity(free_gaps(WINDOW[0], WINDOW[1], busy), req.daily_cap_minutes))
+
+    assigned = distribute(req.total_minutes, caps, ramp=True)
+    out_days, placed = [], 0
+    for (iso, busy), minutes in zip(day_busy, assigned):
+        sessions = place_sessions(minutes, busy, window=WINDOW)
         if sessions:
             out_days.append({"date": iso, "sessions": [
                 {"start_minute": st, "duration_minutes": du, "title": f"Study: {req.event_title}"}
